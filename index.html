@@ -1,0 +1,1119 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Quill</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAzNCAzNCI+PHBhdGggZD0iTTI4IDNMMjMgN0wyNSA4TDE4IDEzTDIwIDE0TDEzIDE4TDEwIDIxQzYgMTYgOSA4IDI4IDNaIiBmaWxsPSIjMjYyMjFDIi8+PHBhdGggZD0iTTkgMjJMNCAyOC41TDMgMzBMNSAyNy41TDEwIDIyLjVaIiBmaWxsPSIjMjYyMjFDIi8+PGNpcmNsZSBjeD0iMyIgY3k9IjMwIiByPSIxLjYiIGZpbGw9IiNFOEE5M0MiLz48L3N2Zz4=">
+<script>
+  /* ============================================================
+     Your Firebase web app config goes here.
+     Firebase console → Project settings (gear icon) → Your apps
+     → Web app → "SDK setup and configuration" → Config.
+     These values are safe to keep in the page — access is
+     controlled by your database security rules, not by hiding
+     the config.
+     ============================================================ */
+  window.QUILL_FIREBASE_CONFIG = {
+    apiKey: "AIzaSyDYNx6R9KEor2eMHBT0k-CqNveV1jGcwZ8",
+    authDomain: "quill-230f3.firebaseapp.com",
+    databaseURL: "https://quill-230f3-default-rtdb.firebaseio.com",
+    projectId: "quill-230f3",
+    appId: "1:711102883084:web:dc094ec9f8575f874e5529"
+  };
+</script>
+</head>
+<body>
+<style>
+  :root {
+    --paper: #FDF9F0;
+    --card: #FFFFFF;
+    --ink: #26221C;
+    --ink-soft: #6E675A;
+    --line: #E7DFCE;
+    --accent: #2C55D9;
+    --accent-ink: #FFFFFF;
+    --mark: #E8A93C;
+    --danger: #B4372F;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper: #1F1C16;
+      --card: #29251E;
+      --ink: #F1EADB;
+      --ink-soft: #A79D8A;
+      --line: #3B362C;
+      --accent: #8FA9F2;
+      --accent-ink: #141B33;
+      --mark: #D9A741;
+      --danger: #E58077;
+    }
+  }
+  :root[data-theme="dark"] {
+    --paper: #1F1C16;
+    --card: #29251E;
+    --ink: #F1EADB;
+    --ink-soft: #A79D8A;
+    --line: #3B362C;
+    --accent: #8FA9F2;
+    --accent-ink: #141B33;
+    --mark: #D9A741;
+    --danger: #E58077;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    line-height: 1.5;
+  }
+  .wrap {
+    max-width: 42rem;
+    margin: 0 auto;
+    padding: 2rem 1.25rem 4rem;
+    display: flex;
+    flex-direction: column;
+    gap: 2.25rem;
+  }
+  .wrap[hidden] { display: none; }
+
+  header { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; }
+  .logo-row { display: flex; align-items: flex-end; gap: 0.1rem; }
+  .feather { width: 1.9rem; height: 1.9rem; flex-shrink: 0; margin-bottom: -0.05rem; }
+  .feather .quill-body { fill: var(--ink); }
+  .feather .nib-dot { fill: var(--mark); }
+  .feather .flourish {
+    fill: none;
+    stroke: var(--ink);
+    stroke-width: 1;
+    stroke-linecap: round;
+    opacity: 0.55;
+  }
+  .wordmark {
+    font-family: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+    font-size: 1.6rem;
+    font-weight: 700;
+    letter-spacing: 0.01em;
+    margin: 0;
+  }
+  .tagline { color: var(--ink-soft); font-size: 0.9rem; margin: 0.1rem 0 0; }
+  .whoami {
+    text-align: right;
+    font-size: 0.85rem;
+    color: var(--ink-soft);
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 0.15rem;
+  }
+  .whoami .name { color: var(--ink); font-weight: 600; }
+  .count {
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    font-size: 0.8rem;
+    color: var(--ink-soft);
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Boot / connecting screen card */
+  .hero {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    padding: 2.25rem 2rem 1.75rem;
+    position: relative;
+  }
+  .hero .mark {
+    font-family: Georgia, serif;
+    font-size: 4.5rem;
+    line-height: 1;
+    color: var(--mark);
+    position: absolute;
+    top: 0.75rem;
+    left: 1.1rem;
+    user-select: none;
+  }
+  .hero-actions { margin-top: 1.5rem; display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; }
+  .login-intro {
+    font-family: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+    font-size: 1.3rem;
+    margin: 0;
+    text-wrap: balance;
+  }
+
+  button {
+    font: inherit;
+    cursor: pointer;
+    border-radius: 4px;
+    border: 1px solid var(--line);
+    background: var(--card);
+    color: var(--ink);
+    padding: 0.5rem 1rem;
+  }
+  button.primary {
+    background: var(--accent);
+    color: var(--accent-ink);
+    border-color: var(--accent);
+    font-weight: 600;
+  }
+  button.quiet {
+    border: none;
+    background: none;
+    color: var(--ink-soft);
+    padding: 0.25rem 0.4rem;
+    font-size: 0.85rem;
+  }
+  button.quiet.danger { color: var(--danger); }
+  button.star { color: var(--mark); }
+  button:disabled { opacity: 0.6; cursor: default; }
+  button:focus-visible, input:focus-visible, textarea:focus-visible, summary:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  /* Sections */
+  h2 {
+    font-size: 0.8rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--ink-soft);
+    margin: 0 0 0.75rem;
+  }
+
+  #add-section { margin-top: 1rem; }
+  form.add, .panel {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    padding: 1.25rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+  label { font-size: 0.85rem; color: var(--ink-soft); display: flex; flex-direction: column; gap: 0.3rem; }
+  input, textarea {
+    font: inherit;
+    color: var(--ink);
+    background: var(--paper);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    padding: 0.55rem 0.7rem;
+    width: 100%;
+  }
+  textarea { resize: vertical; min-height: 4.5rem; font-family: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif; font-size: 1.05rem; }
+  .form-actions { display: flex; gap: 0.6rem; align-items: center; flex-wrap: wrap; }
+  .form-hint { font-size: 0.8rem; color: var(--ink-soft); margin: 0; }
+  .form-error { font-size: 0.85rem; color: var(--danger); margin: 0; min-height: 1.3em; }
+
+  .list-tools { display: flex; gap: 0.6rem; margin-bottom: 1rem; align-items: center; }
+  .list-tools input { flex: 1; }
+  button.chip {
+    font-size: 0.85rem;
+    padding: 0.45rem 0.8rem;
+    white-space: nowrap;
+    color: var(--ink-soft);
+  }
+  button.chip[aria-pressed="true"] {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--accent-ink);
+    font-weight: 600;
+  }
+
+  ul.quotes { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.75rem; }
+  ul.quotes li {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    padding: 1rem 1.1rem;
+    cursor: pointer;
+  }
+  ul.quotes li.open { border-color: var(--accent); cursor: default; }
+  ul.quotes blockquote {
+    margin: 0;
+    font-family: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+    font-size: 1.05rem;
+  }
+  ul.quotes blockquote .fav-mark { color: var(--mark); margin-right: 0.35rem; }
+  ul.quotes .meta {
+    margin-top: 0.5rem;
+    display: flex;
+    align-items: baseline;
+    gap: 0.6rem;
+    flex-wrap: wrap;
+    font-size: 0.85rem;
+    color: var(--ink-soft);
+  }
+  ul.quotes .meta .by { color: var(--ink); font-weight: 600; }
+  ul.quotes .meta .shared { font-style: italic; }
+  ul.quotes .meta .date {
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    font-size: 0.75rem;
+  }
+  ul.quotes .meta .spacer { flex: 1; }
+  ul.quotes .meta .hint { font-size: 0.75rem; }
+  ul.quotes .note { margin: 0.3rem 0 0; font-size: 0.85rem; font-style: italic; color: var(--ink-soft); }
+
+  .actions {
+    margin-top: 0.75rem;
+    padding-top: 0.75rem;
+    border-top: 1px solid var(--line);
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+  .share-panel {
+    margin-top: 0.75rem;
+    padding: 0.75rem;
+    background: var(--paper);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+  }
+  .share-panel .share-title { font-size: 0.8rem; color: var(--ink-soft); margin: 0; }
+  .share-panel .share-row { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+
+  .empty {
+    border: 1px dashed var(--line);
+    border-radius: 4px;
+    padding: 1.5rem;
+    color: var(--ink-soft);
+    text-align: center;
+    font-size: 0.95rem;
+  }
+
+  .panel[hidden] { display: none; }
+
+  details.backup { border-top: 1px solid var(--line); padding-top: 1.25rem; }
+  details summary { cursor: pointer; font-size: 0.85rem; color: var(--ink-soft); }
+  details .inner { display: flex; flex-direction: column; gap: 0.75rem; margin-top: 1rem; }
+  details.backup textarea { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 0.75rem; min-height: 6rem; }
+  .backup-actions { display: flex; gap: 0.6rem; flex-wrap: wrap; }
+  .status { font-size: 0.85rem; color: var(--ink-soft); margin: 0; min-height: 1.3em; }
+  code { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 0.85em; }
+</style>
+
+<!-- ============ Loading ============ -->
+<div class="wrap" id="boot-view">
+  <header>
+    <div>
+      <div class="logo-row">
+        <h1 class="wordmark">Quill</h1>
+        <svg class="feather" viewBox="0 0 34 34" aria-hidden="true">
+          <path class="quill-body" d="M28 3L23 7L25 8L18 13L20 14L13 18L10 21C6 16 9 8 28 3Z" />
+          <path class="quill-body" d="M9 22L4 28.5L3 30L5 27.5L10 22.5Z" />
+          <path class="flourish" d="M3 30C1 30.5 0 32 2 32.5C4 33 4 31.5 6 32C8 32.5 9 31 11 31.5" />
+          <circle class="nib-dot" cx="3" cy="30" r="1.6" />
+        </svg>
+      </div>
+      <p class="tagline">The funny things they said.</p>
+    </div>
+  </header>
+  <section class="hero">
+    <span class="mark" aria-hidden="true">&ldquo;</span>
+    <p class="login-intro" id="boot-message">Connecting&hellip;</p>
+  </section>
+</div>
+
+<!-- ============ Sign-in page (#/login) ============ -->
+<div class="wrap" id="login-view" hidden>
+  <header>
+    <div>
+      <div class="logo-row">
+        <h1 class="wordmark">Quill</h1>
+        <svg class="feather" viewBox="0 0 34 34" aria-hidden="true">
+          <path class="quill-body" d="M28 3L23 7L25 8L18 13L20 14L13 18L10 21C6 16 9 8 28 3Z" />
+          <path class="quill-body" d="M9 22L4 28.5L3 30L5 27.5L10 22.5Z" />
+          <path class="flourish" d="M3 30C1 30.5 0 32 2 32.5C4 33 4 31.5 6 32C8 32.5 9 31 11 31.5" />
+          <circle class="nib-dot" cx="3" cy="30" r="1.6" />
+        </svg>
+      </div>
+      <p class="tagline">The funny things they said.</p>
+    </div>
+  </header>
+
+  <section>
+    <h2 id="auth-heading">Sign in</h2>
+    <form class="panel" id="signin-form">
+      <label>Username
+        <input id="si-username" type="text" required autocomplete="username" placeholder="zach">
+      </label>
+      <label>Password
+        <input id="si-pass" type="password" required autocomplete="current-password">
+      </label>
+      <div class="form-actions">
+        <button class="primary" type="submit" id="si-submit">Sign in</button>
+      </div>
+      <p class="form-error" id="si-error"></p>
+    </form>
+
+    <form class="panel" id="signup-form" hidden>
+      <label>Username <span style="text-transform:none;">(how you'll appear to family when sharing)</span>
+        <input id="su-username" type="text" required maxlength="40" autocomplete="username" placeholder="zach">
+      </label>
+      <label>Password <span style="text-transform:none;">(at least 6 characters)</span>
+        <input id="su-pass" type="password" required minlength="6" autocomplete="new-password">
+      </label>
+      <div class="form-actions">
+        <button class="primary" type="submit" id="su-submit">Create account</button>
+      </div>
+      <p class="form-error" id="su-error"></p>
+    </form>
+
+    <p class="form-hint">
+      <button type="button" class="quiet" id="auth-toggle-btn">New here? Create an account</button>
+    </p>
+  </section>
+</div>
+
+<!-- ============ App page (#/app) ============ -->
+<div class="wrap" id="app-view" hidden>
+  <header>
+    <div>
+      <div class="logo-row">
+        <h1 class="wordmark">Quill</h1>
+        <svg class="feather" viewBox="0 0 34 34" aria-hidden="true">
+          <path class="quill-body" d="M28 3L23 7L25 8L18 13L20 14L13 18L10 21C6 16 9 8 28 3Z" />
+          <path class="quill-body" d="M9 22L4 28.5L3 30L5 27.5L10 22.5Z" />
+          <path class="flourish" d="M3 30C1 30.5 0 32 2 32.5C4 33 4 31.5 6 32C8 32.5 9 31 11 31.5" />
+          <circle class="nib-dot" cx="3" cy="30" r="1.6" />
+        </svg>
+      </div>
+    </div>
+    <div class="whoami">
+      <span class="name" id="whoami-name"></span>
+      <span class="count" id="count"></span>
+      <button class="quiet" id="signout" type="button">Sign out</button>
+    </div>
+  </header>
+
+  <section>
+    <button class="primary" type="button" id="add-quote-toggle">+ Add a quote</button>
+    <div id="add-section" hidden>
+      <h2 id="form-title">Add a quote</h2>
+      <form class="add" id="add-form">
+        <label>The quote
+          <textarea id="f-text" required placeholder="Write it the way they said it&hellip;"></textarea>
+        </label>
+        <label>Who said it
+          <input id="f-by" required placeholder="Uncle Ray, Mom, Dave from next door&hellip;">
+        </label>
+        <label>Context <span style="text-transform:none; letter-spacing:0;">(optional)</span>
+          <input id="f-note" placeholder="Thanksgiving 2019, after the turkey incident">
+        </label>
+        <div class="form-actions">
+          <button class="primary" type="submit" id="f-submit">Save quote</button>
+          <button type="button" id="f-cancel">Cancel</button>
+          <p class="form-hint" id="f-hint"></p>
+        </div>
+      </form>
+    </div>
+  </section>
+
+  <section>
+    <h2>The collection</h2>
+    <div class="list-tools">
+      <input id="search" type="search" placeholder="Search quotes or people&hellip;" aria-label="Search quotes">
+      <button class="chip" id="fav-filter" type="button" aria-pressed="false">&#9733; Favorites</button>
+    </div>
+    <ul class="quotes" id="list"></ul>
+    <div class="empty" id="empty" hidden></div>
+  </section>
+
+  <details class="backup">
+    <summary>Backup &amp; import</summary>
+    <div class="inner">
+      <p class="form-hint">Everything saves to your account automatically and follows you to any device — no backups needed. This box is for getting quotes in and out in bulk: copy your collection as text, or paste quotes to add them.</p>
+      <div id="local-import" hidden>
+        <p class="form-hint" id="local-import-label"></p>
+        <div class="backup-actions" id="local-import-buttons"></div>
+      </div>
+      <textarea id="backup-box" aria-label="Backup data" placeholder='Paste quotes here, then press "Add these quotes"'></textarea>
+      <div class="backup-actions">
+        <button type="button" id="backup-copy">Copy my collection</button>
+        <button type="button" id="backup-load">Add these quotes</button>
+      </div>
+      <p class="status" id="backup-status"></p>
+
+      <p class="form-hint">If quotes show garbled characters like <code>â€™</code> instead of an apostrophe (usually from pasting through a text editor that misread the encoding), this fixes them in place.</p>
+      <div class="backup-actions">
+        <button type="button" id="fix-mojibake">Fix garbled text</button>
+      </div>
+      <p class="status" id="mojibake-status"></p>
+    </div>
+  </details>
+</div>
+
+<script type="module">
+  import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.0.0/firebase-app.js';
+  import {
+    getAuth, onAuthStateChanged, createUserWithEmailAndPassword,
+    signInWithEmailAndPassword, signOut, updateProfile
+  } from 'https://www.gstatic.com/firebasejs/12.0.0/firebase-auth.js';
+  import {
+    getDatabase, ref, push, set, update, remove, onValue, get
+  } from 'https://www.gstatic.com/firebasejs/12.0.0/firebase-database.js';
+
+  const $ = (id) => document.getElementById(id);
+  const config = window.QUILL_FIREBASE_CONFIG;
+
+  /* ---- Config check ---- */
+  if (!config || !config.apiKey || config.apiKey.indexOf('PASTE_') === 0) {
+    $('boot-message').textContent = 'Quill isn’t connected to Firebase yet — open index.html and fill in QUILL_FIREBASE_CONFIG near the top with your project’s web config.';
+    throw new Error('Firebase config missing');
+  }
+
+  const app = initializeApp(config);
+  const auth = getAuth(app);
+  const db = getDatabase(app);
+
+  let me = null;          /* {uid, name} */
+  let family = [];        /* other users: {uid, name} */
+  let quotes = [];        /* my quotes, live from Firestore */
+  let unsubscribe = null; /* Firestore listener */
+  let editingId = null;
+  let openId = null;
+  let favOnly = false;
+  let authReady = false;
+
+  /* ---- Routing: sign-in and app are separate pages ---- */
+  function showPage(name) {
+    $('boot-view').hidden = name !== 'boot';
+    $('login-view').hidden = name !== 'login';
+    $('app-view').hidden = name !== 'app';
+  }
+
+  function route() {
+    if (!authReady) { showPage('boot'); return; }
+    if (location.hash === '#/app') {
+      if (me) showPage('app');
+      else location.replace('#/login');
+    } else {
+      if (location.hash !== '#/login') {
+        try { history.replaceState(null, '', '#/login'); } catch (e) { location.hash = '#/login'; }
+      }
+      showPage('login');
+    }
+  }
+  window.addEventListener('hashchange', route);
+
+  const USERNAME_DOMAIN = '@users.quill.app';
+
+  function normalizeUsername(raw) {
+    return (raw || '').trim().toLowerCase().replace(/[^a-z0-9_.-]/g, '');
+  }
+
+  function usernameToEmail(raw) {
+    return normalizeUsername(raw) + USERNAME_DOMAIN;
+  }
+
+  function emailToUsername(email) {
+    return (email || '').split('@')[0];
+  }
+
+  function friendlyAuthError(err) {
+    const code = err && err.code || '';
+    if (code.includes('email-already-in-use')) return 'That username is taken — try another.';
+    if (code.includes('invalid-credential') || code.includes('wrong-password') || code.includes('user-not-found')) return 'Username or password isn’t right.';
+    if (code.includes('weak-password')) return 'Password needs at least 6 characters.';
+    if (code.includes('invalid-email')) return 'That username has characters we can’t use — stick to letters, numbers, dots, underscores, and hyphens.';
+    if (code.includes('too-many-requests')) return 'Too many tries — wait a minute and try again.';
+    if (code.includes('network-request-failed')) return 'Can’t reach the server — check your connection.';
+    return 'Something went wrong (' + (code || 'unknown') + '). Try again.';
+  }
+
+  /* ---- Auth state drives everything ---- */
+  onAuthStateChanged(auth, async (user) => {
+    authReady = true;
+    if (unsubscribe) { unsubscribe(); unsubscribe = null; }
+
+    if (!user) {
+      me = null;
+      quotes = [];
+      family = [];
+      route();
+      return;
+    }
+
+    me = { uid: user.uid, name: user.displayName || emailToUsername(user.email) };
+    $('whoami-name').textContent = me.name;
+
+    /* Keep the family directory entry fresh so others can share with us. */
+    try {
+      await set(ref(db, 'directory/' + me.uid), { name: me.name });
+    } catch (e) { /* directory write is best-effort */ }
+
+    loadFamily();
+    checkLocalImport();
+
+    unsubscribe = onValue(ref(db, 'users/' + me.uid + '/quotes'), (snap) => {
+      const val = snap.val() || {};
+      quotes = Object.keys(val).map((id) => ({ id, ...val[id] }))
+        .filter((q) => q && typeof q.text === 'string' && q.text);
+      renderList();
+    }, (err) => {
+      $('backup-status').textContent = 'Lost the connection to your collection (' + (err.message || 'unknown') + ') — reload the page.';
+    });
+
+    openId = null;
+    favOnly = false;
+    $('fav-filter').setAttribute('aria-pressed', 'false');
+    resetForm();
+    closeAddSection();
+    $('search').value = '';
+    $('backup-box').value = '';
+    $('backup-status').textContent = '';
+
+    if (location.hash === '#/app') { showPage('app'); } else { location.hash = '#/app'; route(); }
+  });
+
+  async function loadFamily() {
+    try {
+      const snap = await get(ref(db, 'directory'));
+      const val = snap.val() || {};
+      family = Object.keys(val)
+        .map((uid) => ({ uid, name: (val[uid] || {}).name || 'Someone' }))
+        .filter((u) => u.uid !== me.uid);
+    } catch (e) {
+      family = [];
+    }
+  }
+
+  /* ---- Sign in / sign up / sign out ---- */
+  let authMode = 'signin';
+  function setAuthMode(mode) {
+    authMode = mode;
+    const isSignin = mode === 'signin';
+    $('signin-form').hidden = !isSignin;
+    $('signup-form').hidden = isSignin;
+    $('auth-heading').textContent = isSignin ? 'Sign in' : 'Create an account';
+    $('auth-toggle-btn').textContent = isSignin ? 'New here? Create an account' : 'Already have an account? Sign in';
+    $('si-error').textContent = '';
+    $('su-error').textContent = '';
+  }
+  $('auth-toggle-btn').addEventListener('click', () => {
+    setAuthMode(authMode === 'signin' ? 'signup' : 'signin');
+  });
+
+  $('signin-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    $('si-error').textContent = '';
+    const username = normalizeUsername($('si-username').value);
+    if (!username) { $('si-error').textContent = 'Enter your username.'; return; }
+    $('si-submit').disabled = true;
+    try {
+      await signInWithEmailAndPassword(auth, usernameToEmail(username), $('si-pass').value);
+      $('signin-form').reset();
+    } catch (err) {
+      $('si-error').textContent = friendlyAuthError(err);
+    } finally {
+      $('si-submit').disabled = false;
+    }
+  });
+
+  $('signup-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    $('su-error').textContent = '';
+    const rawUsername = $('su-username').value.trim();
+    const username = normalizeUsername(rawUsername);
+    if (!username) { $('su-error').textContent = 'Usernames can only use letters, numbers, dots, underscores, and hyphens.'; return; }
+    $('su-submit').disabled = true;
+    try {
+      const cred = await createUserWithEmailAndPassword(auth, usernameToEmail(username), $('su-pass').value);
+      await updateProfile(cred.user, { displayName: rawUsername });
+      await set(ref(db, 'directory/' + cred.user.uid), { name: rawUsername });
+      me = { uid: cred.user.uid, name: rawUsername };
+      $('whoami-name').textContent = rawUsername;
+      $('signup-form').reset();
+    } catch (err) {
+      $('su-error').textContent = friendlyAuthError(err);
+    } finally {
+      $('su-submit').disabled = false;
+    }
+  });
+
+  $('signout').addEventListener('click', () => { signOut(auth); });
+
+  /* ---- Quote CRUD ---- */
+  function quoteData(text, by, note) {
+    return { text, by, note, added: new Date().toISOString(), fav: false, sharedBy: '' };
+  }
+
+  async function addQuote(data) {
+    return push(ref(db, 'users/' + me.uid + '/quotes'), data);
+  }
+
+  function fmtDate(iso) {
+    try {
+      return new Date(iso).toLocaleDateString(undefined, { month: 'short', year: 'numeric' });
+    } catch (e) { return ''; }
+  }
+
+  function escapeRegExp(s) {
+    return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  }
+
+  /* ---- Garbled-text repair ----
+     Fixes text that was UTF-8, then misread as Windows-1252 somewhere in a
+     copy/paste chain (e.g. "It's" -> "Itâ€™s"). Only touches text that
+     matches the specific "â€" telltale pattern, and only accepts the
+     reversal if the resulting bytes decode as valid UTF-8 — so it never
+     mangles text that wasn't actually corrupted this way. */
+  const CP1252_TO_BYTE = {
+    0x20AC: 0x80, 0x201A: 0x82, 0x0192: 0x83, 0x201E: 0x84, 0x2026: 0x85, 0x2020: 0x86, 0x2021: 0x87,
+    0x02C6: 0x88, 0x2030: 0x89, 0x0160: 0x8A, 0x2039: 0x8B, 0x0152: 0x8C, 0x017D: 0x8E,
+    0x2018: 0x91, 0x2019: 0x92, 0x201C: 0x93, 0x201D: 0x94, 0x2022: 0x95, 0x2013: 0x96, 0x2014: 0x97,
+    0x02DC: 0x98, 0x2122: 0x99, 0x0161: 0x9A, 0x203A: 0x9B, 0x0153: 0x9C, 0x017E: 0x9E, 0x0178: 0x9F
+  };
+
+  function looksMojibake(s) {
+    return typeof s === 'string' && /â€|Ã[-¿]/.test(s);
+  }
+
+  function fixMojibake(s) {
+    if (!looksMojibake(s)) return s;
+    const bytes = [];
+    for (const ch of s) {
+      const cp = ch.codePointAt(0);
+      let byte;
+      if (cp <= 0xFF) byte = cp;
+      else if (CP1252_TO_BYTE[cp] !== undefined) byte = CP1252_TO_BYTE[cp];
+      else return s;
+      bytes.push(byte);
+    }
+    try {
+      return new TextDecoder('utf-8', { fatal: true }).decode(new Uint8Array(bytes));
+    } catch (e) {
+      return s;
+    }
+  }
+
+  function matchesSearch(q, query) {
+    if (!query) return true;
+    try {
+      const re = new RegExp('\\b' + escapeRegExp(query), 'i');
+      return re.test(q.text) || re.test(q.by || '') || re.test(q.note || '');
+    } catch (e) {
+      const needle = query.toLowerCase();
+      return (q.text + ' ' + (q.by || '') + ' ' + (q.note || '')).toLowerCase().indexOf(needle) !== -1;
+    }
+  }
+
+  function copyToClipboard(text, onCopied, onManual) {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(onCopied, onManual);
+    } else {
+      onManual();
+    }
+  }
+
+  /* ---- Favorites ---- */
+  async function toggleFav(id) {
+    const q = quotes.find((x) => x.id === id);
+    if (!q) return;
+    try {
+      await update(ref(db, 'users/' + me.uid + '/quotes/' + id), { fav: !q.fav });
+    } catch (e) {
+      $('backup-status').textContent = 'Couldn’t update the favorite — check your connection.';
+    }
+  }
+
+  /* ---- Sharing ---- */
+  function shareAsText(q) {
+    let line = '“' + q.text + '” — ' + (q.by || 'Unknown');
+    if (q.note) line += ' (' + q.note + ')';
+    return line;
+  }
+
+  async function sendCopyTo(person, q, statusEl) {
+    try {
+      await push(ref(db, 'users/' + person.uid + '/quotes'), {
+        text: q.text, by: q.by || '', note: q.note || '',
+        added: new Date().toISOString(), fav: false, sharedBy: me.name
+      });
+      statusEl.textContent = 'Sent — it’s in ' + person.name + '’s collection now, on every device.';
+    } catch (e) {
+      statusEl.textContent = 'Couldn’t send to ' + person.name + ' (' + (e.message || 'error') + ').';
+    }
+  }
+
+  /* ---- List ---- */
+  function renderList() {
+    const query = $('search').value.trim().toLowerCase();
+    const list = $('list');
+    const empty = $('empty');
+    list.textContent = '';
+
+    const shown = quotes.filter((q) => {
+      if (favOnly && !q.fav) return false;
+      return matchesSearch(q, query);
+    });
+    shown.sort((a, b) => (b.added || '').localeCompare(a.added || ''));
+
+    empty.hidden = shown.length > 0;
+    if (shown.length === 0) {
+      if (quotes.length === 0) {
+        empty.textContent = 'No quotes yet. The best ones are the throwaway lines — write them down before they fade.';
+      } else if (favOnly && !query) {
+        empty.textContent = 'No favorites yet — open a quote and press the star.';
+      } else {
+        empty.textContent = 'Nothing matches “' + $('search').value.trim() + '”' + (favOnly ? ' in your favorites' : '') + '.';
+      }
+    }
+
+    shown.forEach((q) => {
+      const li = document.createElement('li');
+      const isOpen = openId === q.id;
+      if (isOpen) li.classList.add('open');
+
+      const bq = document.createElement('blockquote');
+      if (q.fav) {
+        const star = document.createElement('span');
+        star.className = 'fav-mark';
+        star.textContent = '★';
+        star.setAttribute('aria-label', 'Favorite');
+        bq.appendChild(star);
+      }
+      bq.appendChild(document.createTextNode('“' + q.text + '”'));
+      li.appendChild(bq);
+
+      if (q.note) {
+        const note = document.createElement('p');
+        note.className = 'note';
+        note.textContent = q.note;
+        li.appendChild(note);
+      }
+
+      const meta = document.createElement('div');
+      meta.className = 'meta';
+      const by = document.createElement('span');
+      by.className = 'by';
+      by.textContent = q.by || 'Unknown';
+      meta.appendChild(by);
+      if (q.sharedBy) {
+        const shared = document.createElement('span');
+        shared.className = 'shared';
+        shared.textContent = 'shared by ' + q.sharedBy;
+        meta.appendChild(shared);
+      }
+      const date = document.createElement('span');
+      date.className = 'date';
+      date.textContent = q.added ? fmtDate(q.added) : '';
+      meta.appendChild(date);
+      const spacer = document.createElement('span');
+      spacer.className = 'spacer';
+      meta.appendChild(spacer);
+      const hint = document.createElement('span');
+      hint.className = 'hint';
+      hint.textContent = isOpen ? 'click to close' : 'click for actions';
+      meta.appendChild(hint);
+      li.appendChild(meta);
+
+      if (isOpen) {
+        const actions = document.createElement('div');
+        actions.className = 'actions';
+
+        const fav = document.createElement('button');
+        fav.type = 'button';
+        fav.innerHTML = q.fav ? '&#9733; Favorited' : '&#9734; Favorite';
+        if (q.fav) fav.classList.add('star');
+        fav.addEventListener('click', () => toggleFav(q.id));
+        actions.appendChild(fav);
+
+        const shareBtn = document.createElement('button');
+        shareBtn.type = 'button';
+        shareBtn.textContent = 'Share';
+        actions.appendChild(shareBtn);
+
+        const edit = document.createElement('button');
+        edit.type = 'button';
+        edit.className = 'quiet';
+        edit.textContent = 'Edit';
+        edit.addEventListener('click', () => startEdit(q.id));
+        actions.appendChild(edit);
+
+        const del = document.createElement('button');
+        del.type = 'button';
+        del.className = 'quiet danger';
+        del.textContent = 'Delete';
+        del.addEventListener('click', () => removeQuote(q.id));
+        actions.appendChild(del);
+
+        li.appendChild(actions);
+
+        const sharePanel = document.createElement('div');
+        sharePanel.className = 'share-panel';
+        sharePanel.hidden = true;
+
+        const shareStatus = document.createElement('p');
+        shareStatus.className = 'status';
+
+        if (family.length > 0) {
+          const t1 = document.createElement('p');
+          t1.className = 'share-title';
+          t1.textContent = 'Send it straight to:';
+          sharePanel.appendChild(t1);
+          const row1 = document.createElement('div');
+          row1.className = 'share-row';
+          family.forEach((person) => {
+            const b = document.createElement('button');
+            b.type = 'button';
+            b.textContent = person.name;
+            b.addEventListener('click', () => sendCopyTo(person, q, shareStatus));
+            row1.appendChild(b);
+          });
+          sharePanel.appendChild(row1);
+        } else {
+          const t1 = document.createElement('p');
+          t1.className = 'share-title';
+          t1.textContent = 'Nobody else has an account yet — once family sign up, they’ll show up here.';
+          sharePanel.appendChild(t1);
+        }
+
+        const t2 = document.createElement('p');
+        t2.className = 'share-title';
+        t2.textContent = 'Or copy it to send in a message:';
+        sharePanel.appendChild(t2);
+        const row2 = document.createElement('div');
+        row2.className = 'share-row';
+        const copyTxt = document.createElement('button');
+        copyTxt.type = 'button';
+        copyTxt.textContent = 'Copy as text';
+        copyTxt.addEventListener('click', () => {
+          copyToClipboard(shareAsText(q), () => {
+            shareStatus.textContent = 'Copied — paste it anywhere.';
+          }, () => {
+            shareStatus.textContent = shareAsText(q);
+          });
+        });
+        row2.appendChild(copyTxt);
+        sharePanel.appendChild(row2);
+        sharePanel.appendChild(shareStatus);
+        li.appendChild(sharePanel);
+
+        shareBtn.addEventListener('click', () => {
+          sharePanel.hidden = !sharePanel.hidden;
+        });
+      }
+
+      li.addEventListener('click', (e) => {
+        if (e.target.closest('button, input, form, a')) return;
+        openId = isOpen ? null : q.id;
+        renderList();
+      });
+
+      list.appendChild(li);
+    });
+
+    $('count').textContent = quotes.length === 1 ? '1 quote' : quotes.length + ' quotes';
+  }
+
+  $('fav-filter').addEventListener('click', function () {
+    favOnly = !favOnly;
+    this.setAttribute('aria-pressed', String(favOnly));
+    renderList();
+  });
+
+  /* ---- Add / edit / delete ---- */
+  const NOTE_PLACEHOLDER = 'Thanksgiving 2019, after the turkey incident';
+
+  function openAddSection() {
+    $('add-section').hidden = false;
+    $('add-quote-toggle').hidden = true;
+  }
+
+  function closeAddSection() {
+    $('add-section').hidden = true;
+    $('add-quote-toggle').hidden = false;
+  }
+
+  function resetForm() {
+    editingId = null;
+    $('add-form').reset();
+    $('f-note').placeholder = NOTE_PLACEHOLDER;
+    $('form-title').textContent = 'Add a quote';
+    $('f-submit').textContent = 'Save quote';
+    $('f-hint').textContent = '';
+  }
+
+  function startEdit(id) {
+    const q = quotes.find((x) => x.id === id);
+    if (!q) return;
+    editingId = id;
+    $('f-text').value = q.text;
+    $('f-by').value = q.by || '';
+    $('f-note').value = q.note || '';
+    $('f-note').placeholder = '';
+    $('form-title').textContent = 'Edit quote';
+    $('f-submit').textContent = 'Save changes';
+    openAddSection();
+    $('add-form').scrollIntoView({ behavior: 'smooth', block: 'center' });
+    $('f-text').focus();
+  }
+
+  async function removeQuote(id) {
+    const q = quotes.find((x) => x.id === id);
+    if (!q) return;
+    if (!confirm('Delete this quote by ' + (q.by || 'Unknown') + '? This can’t be undone.')) return;
+    if (editingId === id) resetForm();
+    if (openId === id) openId = null;
+    try {
+      await remove(ref(db, 'users/' + me.uid + '/quotes/' + id));
+    } catch (e) {
+      $('backup-status').textContent = 'Couldn’t delete — check your connection.';
+    }
+  }
+
+  $('add-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const text = $('f-text').value.trim();
+    const by = $('f-by').value.trim();
+    const note = $('f-note').value.trim();
+    if (!text || !by) return;
+    $('f-submit').disabled = true;
+
+    try {
+      if (editingId) {
+        await update(ref(db, 'users/' + me.uid + '/quotes/' + editingId), { text, by, note });
+        resetForm();
+        closeAddSection();
+      } else {
+        await addQuote(quoteData(text, by, note));
+        resetForm();
+        $('f-hint').textContent = "That's going in the quote book.";
+        setTimeout(() => { if (!editingId) $('f-hint').textContent = ''; }, 2000);
+      }
+    } catch (err) {
+      $('f-hint').textContent = 'Couldn’t save (' + (err.code || 'error') + ') — try again.';
+    } finally {
+      $('f-submit').disabled = false;
+    }
+  });
+
+  $('add-quote-toggle').addEventListener('click', openAddSection);
+  $('f-cancel').addEventListener('click', () => { resetForm(); closeAddSection(); });
+  $('search').addEventListener('input', renderList);
+
+  /* ---- Bulk copy / paste ---- */
+  $('backup-copy').addEventListener('click', () => {
+    const payload = JSON.stringify(
+      quotes.map(({ text, by, note, added, fav, sharedBy }) => ({ text, by, note, added, fav, sharedBy })),
+      null, 2
+    );
+    $('backup-box').value = payload;
+    copyToClipboard(payload, () => {
+      $('backup-status').textContent = 'Copied your whole collection as text.';
+    }, () => {
+      $('backup-box').select();
+      $('backup-status').textContent = 'Your collection is in the box above — copy it with Ctrl/Cmd+C.';
+    });
+  });
+
+  $('backup-load').addEventListener('click', async () => {
+    const raw = $('backup-box').value.trim();
+    if (!raw) { $('backup-status').textContent = 'Paste quotes into the box first.'; return; }
+    let incoming;
+    try { incoming = JSON.parse(raw); } catch (e) {
+      $('backup-status').textContent = 'That doesn’t look like Quill data — paste the whole thing.';
+      return;
+    }
+    if (incoming && !Array.isArray(incoming) && typeof incoming === 'object') incoming = [incoming];
+    if (!Array.isArray(incoming)) {
+      $('backup-status').textContent = 'That doesn’t look like Quill data — paste the whole thing.';
+      return;
+    }
+    await importQuotes(incoming, $('backup-status'));
+  });
+
+  $('fix-mojibake').addEventListener('click', async () => {
+    const statusEl = $('mojibake-status');
+    const btn = $('fix-mojibake');
+    btn.disabled = true;
+    statusEl.textContent = 'Checking…';
+    let fixedCount = 0;
+    const checked = quotes.length;
+    try {
+      for (const q of quotes) {
+        const newText = fixMojibake(q.text);
+        const newBy = fixMojibake(q.by || '');
+        const newNote = fixMojibake(q.note || '');
+        if (newText !== q.text || newBy !== (q.by || '') || newNote !== (q.note || '')) {
+          await update(ref(db, 'users/' + me.uid + '/quotes/' + q.id), { text: newText, by: newBy, note: newNote });
+          fixedCount++;
+        }
+      }
+      statusEl.textContent = fixedCount === 0
+        ? 'Checked ' + checked + ' quotes — nothing looked garbled.'
+        : 'Fixed ' + fixedCount + ' of ' + checked + ' quotes.';
+    } catch (err) {
+      statusEl.textContent = 'Something went wrong (' + (err.message || 'error') + ') — run it again to pick up where it left off.';
+    } finally {
+      btn.disabled = false;
+    }
+  });
+
+  async function importQuotes(rows, statusEl) {
+    let added = 0, skipped = 0, failed = 0;
+    statusEl.textContent = 'Adding…';
+    for (const inQ of rows) {
+      if (!inQ || typeof inQ.text !== 'string' || !inQ.text.trim()) continue;
+      const dupe = quotes.some((x) => x.text === inQ.text && (x.by || '') === (inQ.by || ''));
+      if (dupe) { skipped++; continue; }
+      try {
+        await addQuote({
+          text: inQ.text,
+          by: typeof inQ.by === 'string' ? inQ.by : '',
+          note: typeof inQ.note === 'string' ? inQ.note : '',
+          added: typeof inQ.added === 'string' ? inQ.added : new Date().toISOString(),
+          fav: !!inQ.fav,
+          sharedBy: typeof inQ.sharedBy === 'string' ? inQ.sharedBy : ''
+        });
+        added++;
+      } catch (e) { failed++; }
+    }
+    statusEl.textContent = 'Added ' + added + (skipped ? ', skipped ' + skipped + ' you already had' : '') +
+      (failed ? ', ' + failed + ' failed' : '') + '. Nothing was deleted.';
+  }
+
+  /* ---- One-time import of quotes saved by the old offline Quill ---- */
+  function checkLocalImport() {
+    const found = [];
+    try {
+      const legacy = JSON.parse(localStorage.getItem('quill.quotes.v1') || 'null');
+      if (Array.isArray(legacy) && legacy.length) found.push({ label: 'earlier quotes', rows: legacy });
+      const profiles = JSON.parse(localStorage.getItem('quill.profiles.v1') || '[]');
+      if (Array.isArray(profiles)) {
+        profiles.forEach((p) => {
+          const rows = JSON.parse(localStorage.getItem('quill.quotes.v1.' + p.id) || 'null');
+          if (Array.isArray(rows) && rows.length) {
+            found.push({ label: p.name + '’s ' + rows.length + ' quote' + (rows.length === 1 ? '' : 's'), rows });
+          }
+        });
+      }
+    } catch (e) { /* nothing importable */ }
+
+    const box = $('local-import');
+    const buttons = $('local-import-buttons');
+    buttons.textContent = '';
+    box.hidden = found.length === 0;
+    if (found.length === 0) return;
+    $('local-import-label').textContent = 'This browser has quotes from the offline version of Quill. Bring them into your account:';
+    found.forEach((f) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.textContent = 'Import ' + f.label;
+      b.addEventListener('click', () => importQuotes(f.rows, $('backup-status')));
+      buttons.appendChild(b);
+    });
+  }
+
+  route();
+</script>
+</body>
+</html>
