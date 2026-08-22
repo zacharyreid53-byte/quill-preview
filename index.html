@@ -763,6 +763,40 @@
   </section>
 </div>
 
+<!-- ============ Edit a quote (#/edit) ============ -->
+<div class="wrap" id="edit-view" hidden>
+  <header>
+    <div class="header-left">
+      <button class="icon-btn nav-toggle-btn" id="nav-toggle-edit" type="button" aria-label="Menu" aria-haspopup="true" aria-expanded="false">&#9776;</button>
+      <div class="logo-row">
+        <h1 class="wordmark">Quill</h1>
+      </div>
+    </div>
+  </header>
+
+  <section>
+    <button type="button" class="quiet" id="edit-back">&larr; Back</button>
+    <h2>Edit quote</h2>
+    <form class="add" id="edit-form">
+      <label>The quote
+        <textarea id="e-text" required placeholder="Write it the way they said it&hellip;"></textarea>
+      </label>
+      <label>Who said it
+        <input id="e-by" required placeholder="Uncle Ray, Mom, Dave from next door&hellip;">
+      </label>
+      <label>Context <span style="text-transform:none; letter-spacing:0;">(optional)</span>
+        <input id="e-note" placeholder="Thanksgiving 2019, after the turkey incident">
+      </label>
+      <div class="form-actions">
+        <button class="primary" type="submit" id="e-submit">Save changes</button>
+        <button type="button" class="quiet" id="e-cancel">Cancel</button>
+        <button type="button" class="quiet danger" id="e-delete">Delete quote</button>
+        <p class="form-hint" id="e-hint"></p>
+      </div>
+    </form>
+  </section>
+</div>
+
 <!-- ============ Backup & import page (#/import) ============ -->
 <div class="wrap" id="import-view" hidden>
   <header>
@@ -1043,6 +1077,7 @@
     $('collections-view').hidden = name !== 'collections';
     $('collection-view').hidden = name !== 'collection';
     $('friends-view').hidden = name !== 'friends';
+    $('edit-view').hidden = name !== 'edit';
     $('drawer-quotes').setAttribute('aria-current', name === 'app' ? 'page' : 'false');
     $('drawer-collections').setAttribute('aria-current', name === 'collections' ? 'page' : 'false');
     $('drawer-friends').setAttribute('aria-current', name === 'friends' ? 'page' : 'false');
@@ -1066,6 +1101,10 @@
     } else if (location.hash === '#/friends') {
       if (me) showPage('friends');
       else location.replace('#/login');
+    } else if (location.hash === '#/edit') {
+      if (!me) { location.replace('#/login'); }
+      else if (!editingId) { location.replace('#/app'); }
+      else { showPage('edit'); }
     } else {
       if (location.hash !== '#/login') {
         try { history.replaceState(null, '', '#/login'); } catch (e) { location.hash = '#/login'; }
@@ -2498,36 +2537,36 @@
   }
 
   function resetForm() {
-    editingId = null;
     $('add-form').reset();
     $('f-note').placeholder = NOTE_PLACEHOLDER;
     $('f-share-field').hidden = family.length === 0;
-    $('form-title').textContent = 'Add a quote';
-    $('f-submit').textContent = 'Save quote';
     $('f-hint').textContent = '';
   }
 
+  /* Editing opens its own page rather than an inline section — on a long
+     list, scrolling an inline form into view still landed you awkwardly
+     near the top, since the form only ever lives just under the header. */
   function startEdit(id) {
     const q = quotes.find((x) => x.id === id);
     if (!q) return;
     editingId = id;
-    $('f-text').value = q.text;
-    $('f-by').value = q.by || '';
-    $('f-note').value = q.note || '';
-    $('f-note').placeholder = '';
-    $('f-share-field').hidden = true;
-    $('form-title').textContent = 'Edit quote';
-    $('f-submit').textContent = 'Save changes';
-    openAddSection();
-    $('add-form').scrollIntoView({ behavior: 'smooth', block: 'center' });
-    $('f-text').focus();
+    $('e-text').value = q.text;
+    $('e-by').value = q.by || '';
+    $('e-note').value = q.note || '';
+    $('e-hint').textContent = '';
+    location.hash = '#/edit';
+  }
+
+  function closeEditView() {
+    editingId = null;
+    if (location.hash === '#/edit') { location.hash = '#/app'; }
   }
 
   async function removeQuote(id) {
     const q = quotes.find((x) => x.id === id);
     if (!q) return;
     if (!confirm('Delete this quote by ' + (q.by || 'Unknown') + '? This can’t be undone.')) return;
-    if (editingId === id) resetForm();
+    if (editingId === id) closeEditView();
     if (openId === id) openId = null;
     try {
       await remove(ref(db, 'users/' + me.uid + '/quotes/' + id));
@@ -2545,29 +2584,45 @@
     $('f-submit').disabled = true;
 
     try {
-      if (editingId) {
-        await update(ref(db, 'users/' + me.uid + '/quotes/' + editingId), { text, by, note });
-        resetForm();
-        closeAddSection();
-      } else {
-        const shareUids = Array.from($('f-share-with').querySelectorAll('input:checked')).map((el) => el.value);
-        const newRef = await addQuote(quoteData(text, by, note));
-        const names = shareUids.map((uid) => (family.find((p) => p.uid === uid) || {}).name).filter(Boolean);
-        const sharedCount = shareUids.length > 0
-          ? await shareNewQuoteWith(shareUids, { text, by, note }, newRef && newRef.key)
-          : 0;
-        resetForm();
-        $('f-hint').textContent = sharedCount > 0
-          ? "That's going in the quote book — ✓ shared with " + listNames(names) + '.'
-          : "That's going in the quote book.";
-        setTimeout(() => { if (!editingId) $('f-hint').textContent = ''; }, 4000);
-      }
+      const shareUids = Array.from($('f-share-with').querySelectorAll('input:checked')).map((el) => el.value);
+      const newRef = await addQuote(quoteData(text, by, note));
+      const names = shareUids.map((uid) => (family.find((p) => p.uid === uid) || {}).name).filter(Boolean);
+      const sharedCount = shareUids.length > 0
+        ? await shareNewQuoteWith(shareUids, { text, by, note }, newRef && newRef.key)
+        : 0;
+      resetForm();
+      $('f-hint').textContent = sharedCount > 0
+        ? "That's going in the quote book — ✓ shared with " + listNames(names) + '.'
+        : "That's going in the quote book.";
+      setTimeout(() => { $('f-hint').textContent = ''; }, 4000);
     } catch (err) {
       $('f-hint').textContent = 'Couldn’t save (' + (err.code || 'error') + ') — try again.';
     } finally {
       $('f-submit').disabled = false;
     }
   });
+
+  $('edit-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if (!editingId) return;
+    const text = $('e-text').value.trim();
+    const by = $('e-by').value.trim();
+    const note = $('e-note').value.trim();
+    if (!text || !by) return;
+    $('e-submit').disabled = true;
+    try {
+      await update(ref(db, 'users/' + me.uid + '/quotes/' + editingId), { text, by, note });
+      closeEditView();
+    } catch (err) {
+      $('e-hint').textContent = 'Couldn’t save (' + (err.code || 'error') + ') — try again.';
+    } finally {
+      $('e-submit').disabled = false;
+    }
+  });
+
+  $('e-cancel').addEventListener('click', closeEditView);
+  $('edit-back').addEventListener('click', closeEditView);
+  $('e-delete').addEventListener('click', () => { if (editingId) removeQuote(editingId); });
 
   $('add-quote-toggle').addEventListener('click', openAddSection);
   $('f-cancel').addEventListener('click', () => { resetForm(); closeAddSection(); });
