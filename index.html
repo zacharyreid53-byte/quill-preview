@@ -462,20 +462,37 @@
   ul.collections .col-count { font-size: 0.8rem; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
   ul.friends .friend-name { flex: 1; font-size: 1rem; font-weight: 600; color: var(--ink); }
 
-  .collection-filter {
-    display: flex;
-    align-items: center;
-    gap: 0.6rem;
-    margin-bottom: 1rem;
-    padding: 0.6rem 0.8rem;
-    background: var(--card);
-    border: 1px solid var(--accent);
-    border-radius: 4px;
-    font-size: 0.85rem;
+  ul.collections .col-badge {
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--accent-ink);
+    background: var(--accent);
+    border-radius: 999px;
+    padding: 0.1rem 0.45rem;
   }
-  .collection-filter[hidden] { display: none; }
-  .collection-filter .label { flex: 1; color: var(--ink-soft); }
-  .collection-filter .label strong { color: var(--ink); }
+  ul.collections li.legacy { border-style: dashed; }
+  ul.collections .col-name-static { flex: 1; font-size: 1rem; font-weight: 600; color: var(--ink); }
+
+  .member-row { display: flex; gap: 0.4rem; flex-wrap: wrap; margin: 0.6rem 0; }
+  .member-chip {
+    font-size: 0.8rem;
+    color: var(--ink-soft);
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    padding: 0.2rem 0.6rem;
+  }
+  .member-chip.owner { color: var(--ink); border-color: var(--accent); font-weight: 600; }
+  .code-row { display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; margin-top: 0.5rem; }
+  .code-row[hidden] { display: none; }
+  .code-row strong {
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    letter-spacing: 0.08em;
+    color: var(--ink);
+  }
+  #cd-invite-wrap[hidden] { display: none; }
+  #cd-name { margin-bottom: 0.2rem; }
 
   .actions {
     margin-top: 0.75rem;
@@ -649,10 +666,6 @@
 
   <section>
     <h2>The collection</h2>
-    <div class="collection-filter" id="collection-filter" hidden>
-      <span class="label">Showing: <strong id="collection-filter-name"></strong></span>
-      <button type="button" class="quiet" id="collection-filter-clear">Show all quotes</button>
-    </div>
     <div class="list-tools">
       <input id="search" type="search" placeholder="Search quotes or people&hellip;" aria-label="Search quotes">
       <div class="filter-wrap">
@@ -694,11 +707,6 @@
         </label>
         <label>Context <span style="text-transform:none; letter-spacing:0;">(optional)</span>
           <input id="f-note" placeholder="Thanksgiving 2019, after the turkey incident">
-        </label>
-        <label>Collection <span style="text-transform:none; letter-spacing:0;">(optional)</span>
-          <select id="f-collection">
-            <option value="">No collection</option>
-          </select>
         </label>
         <div id="f-share-field" hidden>
           <p class="share-title">Share with <span style="text-transform:none; letter-spacing:0;">(optional)</span></p>
@@ -766,6 +774,15 @@
     </div>
     <p class="status" id="mojibake-status"></p>
   </section>
+
+  <section>
+    <h2>Convert old collections</h2>
+    <p class="form-hint">Collections used to be private to you. Now they're shared, so other people can join them. This copies each old collection into a shared one, along with the quotes you'd assigned to it. Nothing is deleted — the originals stay in your own list.</p>
+    <div class="backup-actions">
+      <button type="button" id="convert-collections">Convert my old collections</button>
+    </div>
+    <p class="status" id="convert-status"></p>
+  </section>
 </div>
 
 <!-- ============ Collections page (#/collections) ============ -->
@@ -793,13 +810,95 @@
         <button class="primary" type="submit" id="collection-submit">Create collection</button>
         <p class="form-error" id="collection-error"></p>
       </div>
+      <p class="form-hint">A collection is shared — invite people by username, or give them the join code.</p>
+    </form>
+  </section>
+
+  <section>
+    <h2>Join a collection</h2>
+    <form class="add" id="join-form">
+      <label>Join code
+        <input id="join-code" required maxlength="12" autocapitalize="characters" spellcheck="false" placeholder="the 8-character code you were given">
+      </label>
+      <div class="form-actions">
+        <button class="primary" type="submit" id="join-submit">Join</button>
+        <p class="form-error" id="join-error"></p>
+      </div>
     </form>
   </section>
 
   <section>
     <h2>Your collections</h2>
     <ul class="collections" id="collection-list"></ul>
-    <div class="empty" id="collections-empty" hidden>No collections yet — create one above, then assign quotes to it from the Quotes tab.</div>
+    <div class="empty" id="collections-empty" hidden>No collections yet — create one above, or join one with a code.</div>
+  </section>
+</div>
+
+<!-- ============ One collection (#/collection) ============ -->
+<div class="wrap" id="collection-view" hidden>
+  <header>
+    <div class="header-left">
+      <button class="icon-btn nav-toggle-btn" id="nav-toggle-collection" type="button" aria-label="Menu" aria-haspopup="true" aria-expanded="false">&#9776;</button>
+      <div class="logo-row">
+        <h1 class="wordmark">Quill</h1>
+      </div>
+    </div>
+    <div class="whoami">
+      <span class="count" id="cd-count"></span>
+    </div>
+  </header>
+
+  <section>
+    <button type="button" class="quiet" id="cd-back">&larr; All collections</button>
+    <h2 id="cd-name"></h2>
+    <p class="form-hint" id="cd-owner"></p>
+    <div class="member-row" id="cd-members"></div>
+
+    <div id="cd-invite-wrap" hidden>
+      <form class="add" id="cd-invite-form">
+        <label>Add someone by username
+          <input id="cd-invite-username" required placeholder="their username">
+        </label>
+        <div class="form-actions">
+          <button class="primary" type="submit" id="cd-invite-submit">Add to collection</button>
+        </div>
+      </form>
+    </div>
+    <div class="code-row" id="cd-code-wrap" hidden>
+      <span class="form-hint">Join code: <strong id="cd-code"></strong></span>
+      <button type="button" class="quiet" id="cd-copy-code">Copy code</button>
+    </div>
+    <p class="status" id="cd-invite-status"></p>
+
+    <div class="backup-actions">
+      <button type="button" class="quiet danger" id="cd-leave" hidden>Leave collection</button>
+      <button type="button" class="quiet danger" id="cd-delete" hidden>Delete for everyone</button>
+    </div>
+  </section>
+
+  <section>
+    <h2>Add a quote here</h2>
+    <form class="add" id="cd-add-form">
+      <label>The quote
+        <textarea id="cd-text" required placeholder="Write it the way they said it&hellip;"></textarea>
+      </label>
+      <label>Who said it
+        <input id="cd-by" required placeholder="Uncle Ray, Mom, Dave from next door&hellip;">
+      </label>
+      <label>Context <span style="text-transform:none; letter-spacing:0;">(optional)</span>
+        <input id="cd-note" placeholder="Thanksgiving 2019, after the turkey incident">
+      </label>
+      <div class="form-actions">
+        <button class="primary" type="submit" id="cd-submit">Add to collection</button>
+        <p class="form-hint" id="cd-status"></p>
+      </div>
+    </form>
+  </section>
+
+  <section>
+    <h2>Quotes in this collection</h2>
+    <ul class="quotes" id="cd-list"></ul>
+    <div class="empty" id="cd-empty" hidden>Nothing here yet — add the first one above.</div>
   </section>
 </div>
 
@@ -878,8 +977,16 @@
   /* shareLog[quoteId][recipientUid] = when — so a quote is never sent twice
      to the same person, across all three ways of sharing. */
   let shareLog = {};
-  let collections = [];
+  /* Shared collections live at collections/$cid (meta + members + quotes), with
+     users/$uid/collections/$cid = true as the index of what I belong to.
+     Legacy per-user collections (an object with a name) are detected and
+     converted by the migration tool on the import page. */
+  let collections = [];        /* [{id, name, ownerUid, ownerName, code, members, memberCount}] */
+  let legacyCollections = [];  /* old-style, awaiting conversion */
   let activeCollectionId = null;
+  let collectionQuotes = [];   /* quotes of the open collection */
+  let unsubscribeCollectionQuotes = null;
+  const collectionUnsubs = new Map(); /* cid -> [unsub, ...] for meta/members */
   let editingId = null;
   let openId = null;
   let favOnly = false;
@@ -895,6 +1002,7 @@
     $('app-view').hidden = name !== 'app';
     $('import-view').hidden = name !== 'import';
     $('collections-view').hidden = name !== 'collections';
+    $('collection-view').hidden = name !== 'collection';
     $('friends-view').hidden = name !== 'friends';
     $('drawer-quotes').setAttribute('aria-current', name === 'app' ? 'page' : 'false');
     $('drawer-collections').setAttribute('aria-current', name === 'collections' ? 'page' : 'false');
@@ -912,6 +1020,10 @@
     } else if (location.hash === '#/collections') {
       if (me) showPage('collections');
       else location.replace('#/login');
+    } else if (location.hash === '#/collection') {
+      if (!me) { location.replace('#/login'); }
+      else if (!activeCollectionId) { location.replace('#/collections'); }
+      else { showPage('collection'); renderCollectionDetail(); }
     } else if (location.hash === '#/friends') {
       if (me) showPage('friends');
       else location.replace('#/login');
@@ -952,93 +1064,173 @@
     location.hash = '#/friends';
   });
 
-  /* ---- Collections ---- */
+  /* ---- Collections (shared) ----
+     users/$uid/collections is an index: cid -> true for shared collections,
+     or the old {name, created} object for ones not yet converted. */
+  function syncCollectionIndex(index) {
+    const wanted = new Set();
+    legacyCollections = [];
+
+    Object.keys(index).forEach((cid) => {
+      const v = index[cid];
+      if (v && typeof v === 'object' && typeof v.name === 'string' && v.name) {
+        legacyCollections.push({ id: cid, name: v.name, created: v.created || '' });
+      } else if (v) {
+        wanted.add(cid);
+      }
+    });
+
+    /* Drop listeners for collections we've left. */
+    for (const cid of Array.from(collectionUnsubs.keys())) {
+      if (!wanted.has(cid)) {
+        collectionUnsubs.get(cid).forEach((fn) => fn());
+        collectionUnsubs.delete(cid);
+        collections = collections.filter((c) => c.id !== cid);
+      }
+    }
+
+    /* Watch each collection's meta and membership. */
+    wanted.forEach((cid) => {
+      if (collectionUnsubs.has(cid)) return;
+      const onMeta = onValue(ref(db, 'collections/' + cid + '/meta'), (s) => {
+        upsertCollection(cid, { meta: s.val() || null });
+      }, () => upsertCollection(cid, { meta: null }));
+      const onMembers = onValue(ref(db, 'collections/' + cid + '/members'), (s) => {
+        upsertCollection(cid, { members: s.val() || {} });
+      }, () => upsertCollection(cid, { members: {} }));
+      collectionUnsubs.set(cid, [onMeta, onMembers]);
+    });
+
+    if (activeCollectionId && !wanted.has(activeCollectionId)) setActiveCollection(null);
+    refreshCollectionViews();
+  }
+
+  function upsertCollection(cid, patch) {
+    let c = collections.find((x) => x.id === cid);
+    if (!c) { c = { id: cid, name: '', members: {}, meta: null }; collections.push(c); }
+    if ('meta' in patch) {
+      c.meta = patch.meta;
+      c.name = (patch.meta && patch.meta.name) || c.name || 'Untitled';
+      c.ownerUid = patch.meta && patch.meta.ownerUid;
+      c.ownerName = patch.meta && patch.meta.ownerName;
+      c.code = patch.meta && patch.meta.code;
+    }
+    if ('members' in patch) c.members = patch.members || {};
+    c.memberCount = Object.keys(c.members || {}).length;
+    collections.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+    refreshCollectionViews();
+  }
+
+  function refreshCollectionViews() {
+    renderCollectionsList();
+    if (activeCollectionId) renderCollectionDetail();
+  }
+
+  function isOwner(c) { return c && c.ownerUid === (me && me.uid); }
+
+  function makeJoinCode() {
+    /* No 0/O/1/I — these get read aloud and typed by hand. */
+    const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    let out = '';
+    for (let i = 0; i < 8; i++) out += alphabet[Math.floor(Math.random() * alphabet.length)];
+    return out;
+  }
+
   function setActiveCollection(id) {
     activeCollectionId = id;
-    const col = id ? collections.find((c) => c.id === id) : null;
-    $('collection-filter').hidden = !col;
-    if (col) $('collection-filter-name').textContent = col.name;
-    renderList();
-  }
-  $('collection-filter-clear').addEventListener('click', () => setActiveCollection(null));
-
-  function populateCollectionSelect() {
-    const sel = $('f-collection');
-    const prevValue = sel.value;
-    sel.textContent = '';
-    const noneOpt = document.createElement('option');
-    noneOpt.value = '';
-    noneOpt.textContent = 'No collection';
-    sel.appendChild(noneOpt);
-    collections.forEach((c) => {
-      const opt = document.createElement('option');
-      opt.value = c.id;
-      opt.textContent = c.name;
-      sel.appendChild(opt);
+    if (unsubscribeCollectionQuotes) { unsubscribeCollectionQuotes(); unsubscribeCollectionQuotes = null; }
+    collectionQuotes = [];
+    if (!id) return;
+    unsubscribeCollectionQuotes = onValue(ref(db, 'collections/' + id + '/quotes'), (snap) => {
+      const val = snap.val() || {};
+      collectionQuotes = Object.keys(val).map((qid) => ({ id: qid, ...val[qid] }))
+        .filter((q) => q && typeof q.text === 'string' && q.text);
+      collectionQuotes.sort((a, b) => (b.added || '').localeCompare(a.added || ''));
+      renderCollectionDetail();
+    }, (err) => {
+      $('cd-status').textContent = 'Couldn’t load these quotes (' + (err.code || 'error') + ').';
     });
-    if (collections.some((c) => c.id === prevValue) || prevValue === '') sel.value = prevValue;
   }
 
   function renderCollectionsList() {
     const list = $('collection-list');
     list.textContent = '';
-    $('collections-empty').hidden = collections.length > 0;
+    $('collections-empty').hidden = collections.length > 0 || legacyCollections.length > 0;
 
     collections.forEach((c) => {
       const li = document.createElement('li');
-      const count = quotes.filter((q) => q.collectionId === c.id).length;
 
       const nameBtn = document.createElement('button');
       nameBtn.type = 'button';
       nameBtn.className = 'col-name';
       nameBtn.textContent = c.name;
-      nameBtn.addEventListener('click', () => {
-        setActiveCollection(c.id);
-        location.hash = '#/app';
-      });
+      nameBtn.addEventListener('click', () => openCollection(c.id));
       li.appendChild(nameBtn);
 
       const countSpan = document.createElement('span');
       countSpan.className = 'col-count';
-      countSpan.textContent = count === 1 ? '1 quote' : count + ' quotes';
+      countSpan.textContent = c.memberCount === 1 ? 'just you' : c.memberCount + ' members';
       li.appendChild(countSpan);
 
-      const renameBtn = document.createElement('button');
-      renameBtn.type = 'button';
-      renameBtn.className = 'quiet';
-      renameBtn.textContent = 'Rename';
-      renameBtn.addEventListener('click', async () => {
-        const name = prompt('Rename collection', c.name);
-        if (!name || !name.trim() || name.trim() === c.name) return;
-        try {
-          await update(ref(db, 'users/' + me.uid + '/collections/' + c.id), { name: name.trim() });
-        } catch (e) {
-          alert('Couldn’t rename — check your connection.');
-        }
-      });
-      li.appendChild(renameBtn);
+      if (isOwner(c)) {
+        const badge = document.createElement('span');
+        badge.className = 'col-badge';
+        badge.textContent = 'owner';
+        li.appendChild(badge);
+      }
 
-      const delBtn = document.createElement('button');
-      delBtn.type = 'button';
-      delBtn.className = 'quiet danger';
-      delBtn.textContent = 'Delete';
-      delBtn.addEventListener('click', async () => {
-        if (!confirm('Delete “' + c.name + '”? Quotes in it aren’t deleted — they just lose this collection.')) return;
-        try {
-          const affected = quotes.filter((q) => q.collectionId === c.id);
-          for (const q of affected) {
-            await update(ref(db, 'users/' + me.uid + '/quotes/' + q.id), { collectionId: '' });
-          }
-          await remove(ref(db, 'users/' + me.uid + '/collections/' + c.id));
-          if (activeCollectionId === c.id) setActiveCollection(null);
-        } catch (e) {
-          alert('Couldn’t delete — check your connection.');
-        }
-      });
-      li.appendChild(delBtn);
+      const openBtn = document.createElement('button');
+      openBtn.type = 'button';
+      openBtn.className = 'quiet';
+      openBtn.textContent = 'Open';
+      openBtn.addEventListener('click', () => openCollection(c.id));
+      li.appendChild(openBtn);
 
       list.appendChild(li);
     });
+
+    if (legacyCollections.length) {
+      legacyCollections.forEach((c) => {
+        const li = document.createElement('li');
+        li.className = 'legacy';
+        const nameSpan = document.createElement('span');
+        nameSpan.className = 'col-name-static';
+        nameSpan.textContent = c.name;
+        li.appendChild(nameSpan);
+        const note = document.createElement('span');
+        note.className = 'col-count';
+        note.textContent = 'not shared yet';
+        li.appendChild(note);
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'quiet';
+        btn.textContent = 'Convert';
+        btn.addEventListener('click', () => convertOneLegacy(c, btn));
+        li.appendChild(btn);
+        list.appendChild(li);
+      });
+    }
+  }
+
+  function openCollection(cid) {
+    setActiveCollection(cid);
+    location.hash = '#/collection';
+  }
+
+  /* Create a shared collection: claim the code, write meta, add self as member,
+     then index it. Order matters — the members rule reads meta.ownerUid. */
+  async function createCollection(name) {
+    const cid = push(ref(db, 'collections')).key;
+    const code = makeJoinCode();
+    await set(ref(db, 'collectionCodes/' + code), cid);
+    await set(ref(db, 'collections/' + cid + '/meta'), {
+      name, ownerUid: me.uid, ownerName: me.name, code, created: new Date().toISOString()
+    });
+    await set(ref(db, 'collections/' + cid + '/members/' + me.uid), {
+      name: me.name, joined: new Date().toISOString(), code
+    });
+    await set(ref(db, 'users/' + me.uid + '/collections/' + cid), true);
+    return cid;
   }
 
   $('collection-form').addEventListener('submit', async (e) => {
@@ -1047,20 +1239,296 @@
     const err = $('collection-error');
     err.textContent = '';
     if (!name) { err.textContent = 'Give the collection a name.'; return; }
-    if (collections.some((c) => c.name.toLowerCase() === name.toLowerCase())) {
+    if (collections.some((c) => (c.name || '').toLowerCase() === name.toLowerCase())) {
       err.textContent = 'You already have a collection called “' + name + '”.';
       return;
     }
     $('collection-submit').disabled = true;
     try {
-      await push(ref(db, 'users/' + me.uid + '/collections'), { name, created: new Date().toISOString() });
+      await createCollection(name);
       $('collection-form').reset();
-    } catch (e) {
-      err.textContent = 'Couldn’t create it — check your connection.';
+    } catch (e2) {
+      err.textContent = 'Couldn’t create it (' + (e2.code || e2.message || 'error') + ').';
     } finally {
       $('collection-submit').disabled = false;
     }
   });
+
+  /* Join by code: look up the code, then write ourselves in. The rule checks
+     the code we submit really maps to this collection. */
+  $('join-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const err = $('join-error');
+    err.textContent = '';
+    const code = $('join-code').value.trim().toUpperCase().replace(/\s+/g, '');
+    if (!code) { err.textContent = 'Enter a join code.'; return; }
+    $('join-submit').disabled = true;
+    try {
+      const snap = await get(ref(db, 'collectionCodes/' + code));
+      const cid = snap.val();
+      if (!cid) { err.textContent = 'No collection has that code.'; return; }
+      if (collections.some((c) => c.id === cid)) {
+        err.textContent = 'You’re already in that collection.';
+        return;
+      }
+      await set(ref(db, 'collections/' + cid + '/members/' + me.uid), {
+        name: me.name, joined: new Date().toISOString(), code
+      });
+      await set(ref(db, 'users/' + me.uid + '/collections/' + cid), true);
+      $('join-form').reset();
+      err.textContent = '';
+      openCollection(cid);
+    } catch (e2) {
+      err.textContent = 'Couldn’t join (' + (e2.code || e2.message || 'error') + ').';
+    } finally {
+      $('join-submit').disabled = false;
+    }
+  });
+
+  async function inviteToCollection(c, username, statusEl) {
+    const input = normalizeUsername(username);
+    if (!input) { statusEl.textContent = 'Enter a username.'; return; }
+    const match = family.find((p) => normalizeUsername(p.name) === input);
+    if (!match) { statusEl.textContent = 'No account found with that username.'; return; }
+    if (c.members && c.members[match.uid]) {
+      statusEl.textContent = match.name + ' is already in this collection.';
+      return;
+    }
+    statusEl.textContent = 'Adding ' + match.name + '…';
+    try {
+      await set(ref(db, 'collections/' + c.id + '/members/' + match.uid), {
+        name: match.name, joined: new Date().toISOString(), code: c.code || ''
+      });
+      await set(ref(db, 'users/' + match.uid + '/collections/' + c.id), true);
+      statusEl.textContent = '✓ Added ' + match.name + ' — they’ll see it right away.';
+    } catch (e) {
+      statusEl.textContent = 'Couldn’t add ' + match.name + ' (' + (e.code || e.message || 'error') + ').';
+    }
+  }
+
+  async function leaveCollection(c) {
+    if (!confirm('Leave “' + c.name + '”? You’ll stop seeing its quotes.')) return;
+    try {
+      await remove(ref(db, 'collections/' + c.id + '/members/' + me.uid));
+      await remove(ref(db, 'users/' + me.uid + '/collections/' + c.id));
+      setActiveCollection(null);
+      location.hash = '#/collections';
+    } catch (e) {
+      alert('Couldn’t leave (' + (e.code || e.message || 'error') + ').');
+    }
+  }
+
+  function renderCollectionDetail() {
+    const c = collections.find((x) => x.id === activeCollectionId);
+    if (!c) return;
+    $('cd-name').textContent = c.name;
+    $('cd-owner').textContent = isOwner(c) ? 'You own this' : 'Owned by ' + (c.ownerName || 'someone');
+
+    /* Members */
+    const mem = $('cd-members');
+    mem.textContent = '';
+    Object.keys(c.members || {}).forEach((uid) => {
+      const chip = document.createElement('span');
+      chip.className = 'member-chip';
+      chip.textContent = (c.members[uid] || {}).name || 'Someone';
+      if (uid === c.ownerUid) chip.classList.add('owner');
+      mem.appendChild(chip);
+    });
+
+    /* Owner-only controls */
+    $('cd-invite-wrap').hidden = !isOwner(c);
+    $('cd-code-wrap').hidden = !c.code;
+    if (c.code) $('cd-code').textContent = c.code;
+    $('cd-delete').hidden = !isOwner(c);
+    $('cd-leave').hidden = isOwner(c);
+
+    /* Quotes */
+    const list = $('cd-list');
+    list.textContent = '';
+    $('cd-empty').hidden = collectionQuotes.length > 0;
+    collectionQuotes.forEach((q) => {
+      const li = document.createElement('li');
+      const bq = document.createElement('blockquote');
+      bq.textContent = '“' + q.text + '”';
+      li.appendChild(bq);
+      if (q.note) {
+        const note = document.createElement('p');
+        note.className = 'note';
+        note.textContent = q.note;
+        li.appendChild(note);
+      }
+      const meta = document.createElement('div');
+      meta.className = 'meta';
+      const by = document.createElement('span');
+      by.className = 'by';
+      by.textContent = q.by || 'Unknown';
+      meta.appendChild(by);
+      if (q.addedBy) {
+        const who = document.createElement('span');
+        who.className = 'shared';
+        who.textContent = 'added by ' + q.addedBy;
+        meta.appendChild(who);
+      }
+      const date = document.createElement('span');
+      date.className = 'date';
+      date.textContent = q.added ? fmtDate(q.added) : '';
+      meta.appendChild(date);
+      const spacer = document.createElement('span');
+      spacer.className = 'spacer';
+      meta.appendChild(spacer);
+      /* Anyone can add; only the person who added it, or the owner, can remove. */
+      if (q.addedByUid === me.uid || isOwner(c)) {
+        const del = document.createElement('button');
+        del.type = 'button';
+        del.className = 'quiet danger';
+        del.textContent = 'Remove';
+        del.addEventListener('click', async () => {
+          if (!confirm('Remove this quote from “' + c.name + '”?')) return;
+          try {
+            await remove(ref(db, 'collections/' + c.id + '/quotes/' + q.id));
+          } catch (e) {
+            alert('Couldn’t remove (' + (e.code || e.message || 'error') + ').');
+          }
+        });
+        meta.appendChild(del);
+      }
+      li.appendChild(meta);
+      list.appendChild(li);
+    });
+    $('cd-count').textContent = collectionQuotes.length === 1 ? '1 quote' : collectionQuotes.length + ' quotes';
+  }
+
+  $('cd-add-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const c = collections.find((x) => x.id === activeCollectionId);
+    if (!c) return;
+    const text = $('cd-text').value.trim();
+    const by = $('cd-by').value.trim();
+    const note = $('cd-note').value.trim();
+    const status = $('cd-status');
+    status.textContent = '';
+    if (!text || !by) { status.textContent = 'A quote and who said it are both needed.'; return; }
+    $('cd-submit').disabled = true;
+    try {
+      await push(ref(db, 'collections/' + c.id + '/quotes'), {
+        text, by, note,
+        added: new Date().toISOString(),
+        addedBy: me.name, addedByUid: me.uid
+      });
+      $('cd-add-form').reset();
+      status.textContent = '✓ Added to ' + c.name + '.';
+      setTimeout(() => { status.textContent = ''; }, 3000);
+    } catch (e2) {
+      status.textContent = 'Couldn’t add (' + (e2.code || e2.message || 'error') + ').';
+    } finally {
+      $('cd-submit').disabled = false;
+    }
+  });
+
+  $('cd-invite-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const c = collections.find((x) => x.id === activeCollectionId);
+    if (!c) return;
+    $('cd-invite-submit').disabled = true;
+    try {
+      await inviteToCollection(c, $('cd-invite-username').value, $('cd-invite-status'));
+      $('cd-invite-form').reset();
+    } finally {
+      $('cd-invite-submit').disabled = false;
+    }
+  });
+
+  $('cd-copy-code').addEventListener('click', () => {
+    const c = collections.find((x) => x.id === activeCollectionId);
+    if (!c || !c.code) return;
+    copyToClipboard(c.code, () => {
+      $('cd-invite-status').textContent = 'Code copied — anyone with it can join.';
+    }, () => {
+      $('cd-invite-status').textContent = 'Join code: ' + c.code;
+    });
+  });
+
+  $('cd-back').addEventListener('click', () => {
+    setActiveCollection(null);
+    location.hash = '#/collections';
+  });
+
+  $('cd-leave').addEventListener('click', () => {
+    const c = collections.find((x) => x.id === activeCollectionId);
+    if (c) leaveCollection(c);
+  });
+
+  $('cd-delete').addEventListener('click', () => {
+    const c = collections.find((x) => x.id === activeCollectionId);
+    if (c) deleteCollection(c);
+  });
+
+  /* Converts one old per-user collection into a shared one. Copies the quotes
+     that were assigned to it, then clears the tag from the personal copies —
+     nothing is deleted, so a half-finished run is safe to re-run. */
+  async function convertOneLegacy(legacy, btn) {
+    if (btn) btn.disabled = true;
+    try {
+      const cid = await createCollection(legacy.name);
+      const assigned = quotes.filter((q) => q.collectionId === legacy.id);
+      for (const q of assigned) {
+        await push(ref(db, 'collections/' + cid + '/quotes'), {
+          text: q.text, by: q.by || '', note: q.note || '',
+          added: q.added || new Date().toISOString(),
+          addedBy: me.name, addedByUid: me.uid
+        });
+        await update(ref(db, 'users/' + me.uid + '/quotes/' + q.id), { collectionId: '' });
+      }
+      /* Replace the legacy object with the shared-collection pointer. */
+      await set(ref(db, 'users/' + me.uid + '/collections/' + legacy.id), null);
+      return { cid, moved: assigned.length };
+    } finally {
+      if (btn) btn.disabled = false;
+    }
+  }
+
+  $('convert-collections').addEventListener('click', async () => {
+    const status = $('convert-status');
+    const btn = $('convert-collections');
+    if (legacyCollections.length === 0) {
+      status.textContent = 'Nothing to convert — all your collections are already shared.';
+      return;
+    }
+    if (!confirm('Convert ' + legacyCollections.length + ' collection' +
+      (legacyCollections.length === 1 ? '' : 's') +
+      ' into shared ones? Your quotes are copied in, and the originals stay in your list.')) return;
+    btn.disabled = true;
+    let done = 0, moved = 0, failed = 0;
+    for (const legacy of legacyCollections.slice()) {
+      try {
+        const r = await convertOneLegacy(legacy, null);
+        done++; moved += r.moved;
+      } catch (e) { failed++; }
+    }
+    btn.disabled = false;
+    status.textContent = 'Converted ' + done + ' collection' + (done === 1 ? '' : 's') +
+      ', copying ' + moved + ' quote' + (moved === 1 ? '' : 's') + ' in.' +
+      (failed ? ' ' + failed + ' failed — try again.' : '') +
+      ' Your personal list still has the originals.';
+  });
+
+  async function deleteCollection(c) {
+    if (!confirm('Delete “' + c.name + '” for everyone? Its quotes are deleted too. This can’t be undone.')) return;
+    try {
+      const members = Object.keys(c.members || {});
+      await remove(ref(db, 'collections/' + c.id + '/quotes'));
+      for (const uid of members) {
+        await remove(ref(db, 'collections/' + c.id + '/members/' + uid));
+        await remove(ref(db, 'users/' + uid + '/collections/' + c.id));
+      }
+      if (c.code) await remove(ref(db, 'collectionCodes/' + c.code));
+      await remove(ref(db, 'collections/' + c.id + '/meta'));
+      setActiveCollection(null);
+      location.hash = '#/collections';
+    } catch (e) {
+      alert('Couldn’t delete (' + (e.code || e.message || 'error') + ').');
+    }
+  }
 
   function renderFriendsList() {
     const list = $('friend-list');
@@ -1150,7 +1618,11 @@
     if (!user) {
       me = null;
       quotes = [];
+      collectionUnsubs.forEach((fns) => fns.forEach((fn) => fn()));
+      collectionUnsubs.clear();
+      setActiveCollection(null);
       collections = [];
+      legacyCollections = [];
       friends = [];
       family = [];
       shareLog = {};
@@ -1179,15 +1651,7 @@
     });
 
     unsubscribeCollections = onValue(ref(db, 'users/' + me.uid + '/collections'), (snap) => {
-      const val = snap.val() || {};
-      collections = Object.keys(val).map((id) => ({ id, ...val[id] }))
-        .filter((c) => c && typeof c.name === 'string' && c.name);
-      collections.sort((a, b) => a.name.localeCompare(b.name));
-      if (activeCollectionId && !collections.some((c) => c.id === activeCollectionId)) {
-        setActiveCollection(null);
-      }
-      populateCollectionSelect();
-      renderCollectionsList();
+      syncCollectionIndex(snap.val() || {});
     });
 
     unsubscribeFriends = onValue(ref(db, 'users/' + me.uid + '/friends'), (snap) => {
@@ -1209,8 +1673,7 @@
     ownerFilter = 'all';
     updateFilterUI();
     closeFilterMenu();
-    activeCollectionId = null;
-    $('collection-filter').hidden = true;
+    setActiveCollection(null);
     selectMode = false;
     selectedIds = new Set();
     $('select-toggle').setAttribute('aria-pressed', 'false');
@@ -1359,8 +1822,8 @@
   });
 
   /* ---- Quote CRUD ---- */
-  function quoteData(text, by, note, collectionId) {
-    return { text, by, note, collectionId: collectionId || '', added: new Date().toISOString(), fav: false, sharedBy: '' };
+  function quoteData(text, by, note) {
+    return { text, by, note, added: new Date().toISOString(), fav: false, sharedBy: '' };
   }
 
   async function addQuote(data) {
@@ -1526,7 +1989,6 @@
 
     const shown = quotes.filter((q) => {
       if (favOnly && !q.fav) return false;
-      if (activeCollectionId && q.collectionId !== activeCollectionId) return false;
       if (ownerFilter === 'mine' && q.sharedBy) return false;
       if (ownerFilter === 'others' && !q.sharedBy) return false;
       return matchesSearch(q, query);
@@ -1541,8 +2003,6 @@
     if (shown.length === 0) {
       if (quotes.length === 0) {
         empty.textContent = 'No quotes yet. The best ones are the throwaway lines — write them down before they fade.';
-      } else if (activeCollectionId && !query && !favOnly && ownerFilter === 'all') {
-        empty.textContent = 'No quotes in this collection yet — add one, or assign an existing quote to it from Edit.';
       } else if (favOnly && !query && ownerFilter === 'all') {
         empty.textContent = 'No favorites yet — open a quote and press the star.';
       } else if (ownerFilter !== 'all' && !query && !favOnly) {
@@ -1786,7 +2246,6 @@
     const query = $('search').value.trim().toLowerCase();
     return quotes.filter((q) => {
       if (favOnly && !q.fav) return false;
-      if (activeCollectionId && q.collectionId !== activeCollectionId) return false;
       if (ownerFilter === 'mine' && q.sharedBy) return false;
       if (ownerFilter === 'others' && !q.sharedBy) return false;
       return matchesSearch(q, query);
@@ -1929,7 +2388,6 @@
     editingId = null;
     $('add-form').reset();
     $('f-note').placeholder = NOTE_PLACEHOLDER;
-    $('f-collection').value = activeCollectionId || '';
     $('f-share-field').hidden = family.length === 0;
     $('form-title').textContent = 'Add a quote';
     $('f-submit').textContent = 'Save quote';
@@ -1944,7 +2402,6 @@
     $('f-by').value = q.by || '';
     $('f-note').value = q.note || '';
     $('f-note').placeholder = '';
-    $('f-collection').value = q.collectionId || '';
     $('f-share-field').hidden = true;
     $('form-title').textContent = 'Edit quote';
     $('f-submit').textContent = 'Save changes';
@@ -1971,18 +2428,17 @@
     const text = $('f-text').value.trim();
     const by = $('f-by').value.trim();
     const note = $('f-note').value.trim();
-    const collectionId = $('f-collection').value;
     if (!text || !by) return;
     $('f-submit').disabled = true;
 
     try {
       if (editingId) {
-        await update(ref(db, 'users/' + me.uid + '/quotes/' + editingId), { text, by, note, collectionId });
+        await update(ref(db, 'users/' + me.uid + '/quotes/' + editingId), { text, by, note });
         resetForm();
         closeAddSection();
       } else {
         const shareUids = Array.from($('f-share-with').querySelectorAll('input:checked')).map((el) => el.value);
-        const newRef = await addQuote(quoteData(text, by, note, collectionId));
+        const newRef = await addQuote(quoteData(text, by, note));
         const names = shareUids.map((uid) => (family.find((p) => p.uid === uid) || {}).name).filter(Boolean);
         const sharedCount = shareUids.length > 0
           ? await shareNewQuoteWith(shareUids, { text, by, note }, newRef && newRef.key)
