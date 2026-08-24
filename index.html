@@ -1000,9 +1000,15 @@
   </section>
 
   <section>
+    <h2>People you can add</h2>
+    <ul class="friends" id="discover-list"></ul>
+    <div class="empty" id="discover-empty" hidden>Everyone who's signed up is already your friend.</div>
+  </section>
+
+  <section>
     <h2>Your friends</h2>
     <ul class="friends" id="friend-list"></ul>
-    <div class="empty" id="friends-empty" hidden>No friends added yet — add one above by their username.</div>
+    <div class="empty" id="friends-empty" hidden>No friends added yet.</div>
   </section>
 </div>
 
@@ -1610,6 +1616,44 @@
     }
   }
 
+  /* Everyone signed up who isn't already a friend — so adding one is a tap
+     instead of having to know and type their exact username. */
+  function renderDiscoverList() {
+    const list = $('discover-list');
+    if (!list) return;
+    list.textContent = '';
+    const candidates = family
+      .filter((p) => !friends.some((f) => f.uid === p.uid))
+      .sort((a, b) => a.name.localeCompare(b.name));
+    $('discover-empty').hidden = candidates.length > 0;
+
+    candidates.forEach((p) => {
+      const li = document.createElement('li');
+
+      const name = document.createElement('span');
+      name.className = 'friend-name';
+      name.textContent = p.name;
+      li.appendChild(name);
+
+      const addBtn = document.createElement('button');
+      addBtn.type = 'button';
+      addBtn.className = 'quiet';
+      addBtn.textContent = 'Add';
+      addBtn.addEventListener('click', async () => {
+        addBtn.disabled = true;
+        try {
+          await set(ref(db, 'users/' + me.uid + '/friends/' + p.uid), { name: p.name, added: new Date().toISOString() });
+        } catch (e) {
+          alert('Couldn’t add ' + p.name + ' (' + (e.code || e.message || 'error') + ').');
+          addBtn.disabled = false;
+        }
+      });
+      li.appendChild(addBtn);
+
+      list.appendChild(li);
+    });
+  }
+
   function renderFriendsList() {
     const list = $('friend-list');
     list.textContent = '';
@@ -1741,6 +1785,7 @@
         .filter((f) => f && typeof f.name === 'string' && f.name);
       friends.sort((a, b) => a.name.localeCompare(b.name));
       renderFriendsList();
+      renderDiscoverList();
     });
 
     unsubscribeShares = onValue(ref(db, 'users/' + me.uid + '/shares'), (snap) => {
@@ -1780,6 +1825,7 @@
       family = [];
     }
     populateShareWith();
+    renderDiscoverList();
   }
 
   function populateShareWith() {
