@@ -57,7 +57,22 @@
           ".read": "auth != null && auth.uid === $uid",
           ".write": "auth != null && auth.uid === $uid",
           "$fuid": {
-            ".validate": "newData.child('name').isString() && newData.child('name').val().length > 0 && newData.child('name').val().length <= 60"
+            ".write": "auth != null && (auth.uid === $uid || auth.uid === $fuid)",
+            ".validate": "!newData.exists() || (newData.child('name').isString() && newData.child('name').val().length > 0 && newData.child('name').val().length <= 60)"
+          }
+        },
+        "friendRequests": {
+          ".read": "auth != null && auth.uid === $uid",
+          "$fromUid": {
+            ".write": "auth != null && (auth.uid === $uid || auth.uid === $fromUid)",
+            ".validate": "!newData.exists() || (newData.child('name').isString() && newData.child('name').val().length > 0 && newData.child('name').val().length <= 60)"
+          }
+        },
+        "sentRequests": {
+          ".read": "auth != null && auth.uid === $uid",
+          "$toUid": {
+            ".write": "auth != null && (auth.uid === $uid || auth.uid === $toUid)",
+            ".validate": "!newData.exists() || (newData.child('name').isString() && newData.child('name').val().length > 0 && newData.child('name').val().length <= 60)"
           }
         },
         "shares": {

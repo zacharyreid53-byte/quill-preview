@@ -340,7 +340,34 @@
     font-size: 1.2rem;
     line-height: 1;
     flex-shrink: 0;
+    position: relative;
   }
+  .nav-toggle-btn.has-requests::after {
+    content: '';
+    position: absolute;
+    top: 3px;
+    right: 3px;
+    width: 0.55rem;
+    height: 0.55rem;
+    border-radius: 50%;
+    background: var(--danger);
+    border: 1.5px solid var(--card);
+  }
+  .drawer-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 1.15rem;
+    height: 1.15rem;
+    padding: 0 0.3rem;
+    border-radius: 999px;
+    background: var(--danger);
+    color: #fff;
+    font-size: 0.68rem;
+    font-weight: 700;
+    vertical-align: middle;
+  }
+  .drawer-badge[hidden] { display: none; }
   button.chip {
     font-size: 0.85rem;
     padding: 0.45rem 0.8rem;
@@ -993,16 +1020,21 @@
         <input id="friend-username" required placeholder="their username">
       </label>
       <div class="form-actions">
-        <button class="primary" type="submit" id="friend-submit">Add friend</button>
+        <button class="primary" type="submit" id="friend-submit">Send request</button>
         <p class="form-error" id="friend-error"></p>
       </div>
     </form>
   </section>
 
+  <section id="requests-section" hidden>
+    <h2>Friend requests</h2>
+    <ul class="friends" id="requests-list"></ul>
+  </section>
+
   <section>
     <h2>People you can add</h2>
     <ul class="friends" id="discover-list"></ul>
-    <div class="empty" id="discover-empty" hidden>Everyone who's signed up is already your friend.</div>
+    <div class="empty" id="discover-empty" hidden>Everyone who's signed up is already your friend, requested, or has asked you.</div>
   </section>
 
   <section>
@@ -1016,7 +1048,7 @@
 <nav id="nav-drawer" hidden aria-label="Main navigation">
   <button type="button" class="drawer-link" id="drawer-quotes" aria-current="page">Quotes</button>
   <button type="button" class="drawer-link" id="drawer-collections">Collections</button>
-  <button type="button" class="drawer-link" id="drawer-friends">Friends</button>
+  <button type="button" class="drawer-link" id="drawer-friends">Friends <span class="drawer-badge" id="friends-req-badge" hidden></span></button>
 </nav>
 
 <script type="module">
@@ -1049,6 +1081,10 @@
   let unsubscribeCollections = null;
   let unsubscribeFriends = null;
   let friends = [];
+  let unsubscribeFriendRequests = null;
+  let friendRequests = [];  /* incoming: people who asked to be my friend */
+  let unsubscribeSentRequests = null;
+  let sentRequests = [];    /* outgoing: people I've asked, not yet answered */
   let unsubscribeShares = null;
   /* shareLog[quoteId][recipientUid] = when — so a quote is never sent twice
      to the same person, across all three ways of sharing. */
@@ -1618,12 +1654,100 @@
 
   /* Everyone signed up who isn't already a friend — so adding one is a tap
      instead of having to know and type their exact username. */
+  /* ---- Friend requests ----
+     Sending writes to both trees: the recipient's friendRequests (so they see
+     it) and my own sentRequests (so I can show "Requested" and cancel it,
+     since I can't read anyone else's incoming list). Accepting/declining/
+     cancelling always clears both sides. */
+  async function sendFriendRequest(person) {
+    const now = new Date().toISOString();
+    await set(ref(db, 'users/' + person.uid + '/friendRequests/' + me.uid), { name: me.name, sentAt: now });
+    await set(ref(db, 'users/' + me.uid + '/sentRequests/' + person.uid), { name: person.name, sentAt: now });
+  }
+
+  async function cancelSentRequest(person) {
+    await remove(ref(db, 'users/' + me.uid + '/sentRequests/' + person.uid));
+    await remove(ref(db, 'users/' + person.uid + '/friendRequests/' + me.uid));
+  }
+
+  async function respondToRequest(r, accept) {
+    if (accept) {
+      const now = new Date().toISOString();
+      await set(ref(db, 'users/' + me.uid + '/friends/' + r.uid), { name: r.name, added: now });
+      await set(ref(db, 'users/' + r.uid + '/friends/' + me.uid), { name: me.name, added: now });
+    }
+    await remove(ref(db, 'users/' + me.uid + '/friendRequests/' + r.uid));
+    await remove(ref(db, 'users/' + r.uid + '/sentRequests/' + me.uid));
+  }
+
+  function updateRequestBadges() {
+    const n = friendRequests.length;
+    document.querySelectorAll('.nav-toggle-btn').forEach((b) => b.classList.toggle('has-requests', n > 0));
+    const badge = $('friends-req-badge');
+    if (badge) { badge.textContent = String(n); badge.hidden = n === 0; }
+  }
+
+  function renderRequestsList() {
+    const section = $('requests-section');
+    section.hidden = friendRequests.length === 0;
+    const list = $('requests-list');
+    list.textContent = '';
+
+    friendRequests.forEach((r) => {
+      const li = document.createElement('li');
+
+      const name = document.createElement('span');
+      name.className = 'friend-name';
+      name.textContent = r.name;
+      li.appendChild(name);
+
+      const acceptBtn = document.createElement('button');
+      acceptBtn.type = 'button';
+      acceptBtn.textContent = 'Accept';
+      acceptBtn.addEventListener('click', async () => {
+        acceptBtn.disabled = true;
+        declineBtn.disabled = true;
+        try {
+          await respondToRequest(r, true);
+        } catch (e) {
+          alert('Couldn’t accept (' + (e.code || e.message || 'error') + ').');
+          acceptBtn.disabled = false;
+          declineBtn.disabled = false;
+        }
+      });
+      li.appendChild(acceptBtn);
+
+      const declineBtn = document.createElement('button');
+      declineBtn.type = 'button';
+      declineBtn.className = 'quiet danger';
+      declineBtn.textContent = 'Decline';
+      declineBtn.addEventListener('click', async () => {
+        acceptBtn.disabled = true;
+        declineBtn.disabled = true;
+        try {
+          await respondToRequest(r, false);
+        } catch (e) {
+          alert('Couldn’t decline (' + (e.code || e.message || 'error') + ').');
+          acceptBtn.disabled = false;
+          declineBtn.disabled = false;
+        }
+      });
+      li.appendChild(declineBtn);
+
+      list.appendChild(li);
+    });
+  }
+
   function renderDiscoverList() {
     const list = $('discover-list');
     if (!list) return;
     list.textContent = '';
+    const incomingUids = new Set(friendRequests.map((r) => r.uid));
+    const sentByUid = new Map(sentRequests.map((r) => [r.uid, r]));
+    /* People who already asked me show in Friend requests above, not here. */
     const candidates = family
       .filter((p) => !friends.some((f) => f.uid === p.uid))
+      .filter((p) => !incomingUids.has(p.uid))
       .sort((a, b) => a.name.localeCompare(b.name));
     $('discover-empty').hidden = candidates.length > 0;
 
@@ -1635,20 +1759,42 @@
       name.textContent = p.name;
       li.appendChild(name);
 
-      const addBtn = document.createElement('button');
-      addBtn.type = 'button';
-      addBtn.className = 'quiet';
-      addBtn.textContent = 'Add';
-      addBtn.addEventListener('click', async () => {
-        addBtn.disabled = true;
-        try {
-          await set(ref(db, 'users/' + me.uid + '/friends/' + p.uid), { name: p.name, added: new Date().toISOString() });
-        } catch (e) {
-          alert('Couldn’t add ' + p.name + ' (' + (e.code || e.message || 'error') + ').');
-          addBtn.disabled = false;
-        }
-      });
-      li.appendChild(addBtn);
+      if (sentByUid.has(p.uid)) {
+        const status = document.createElement('span');
+        status.className = 'col-count';
+        status.textContent = 'Requested';
+        li.appendChild(status);
+
+        const cancelBtn = document.createElement('button');
+        cancelBtn.type = 'button';
+        cancelBtn.className = 'quiet';
+        cancelBtn.textContent = 'Cancel';
+        cancelBtn.addEventListener('click', async () => {
+          cancelBtn.disabled = true;
+          try {
+            await cancelSentRequest(p);
+          } catch (e) {
+            alert('Couldn’t cancel (' + (e.code || e.message || 'error') + ').');
+            cancelBtn.disabled = false;
+          }
+        });
+        li.appendChild(cancelBtn);
+      } else {
+        const addBtn = document.createElement('button');
+        addBtn.type = 'button';
+        addBtn.className = 'quiet';
+        addBtn.textContent = 'Add';
+        addBtn.addEventListener('click', async () => {
+          addBtn.disabled = true;
+          try {
+            await sendFriendRequest(p);
+          } catch (e) {
+            alert('Couldn’t send a request to ' + p.name + ' (' + (e.code || e.message || 'error') + ').');
+            addBtn.disabled = false;
+          }
+        });
+        li.appendChild(addBtn);
+      }
 
       list.appendChild(li);
     });
@@ -1675,6 +1821,7 @@
         if (!confirm('Remove ' + f.name + ' from your friends?')) return;
         try {
           await remove(ref(db, 'users/' + me.uid + '/friends/' + f.uid));
+          await remove(ref(db, 'users/' + f.uid + '/friends/' + me.uid));
         } catch (e) {
           alert('Couldn’t remove (' + (e.code || e.message || 'error') + ') — try again.');
         }
@@ -1694,13 +1841,15 @@
     if (input === normalizeUsername(me.name)) { err.textContent = 'That’s your own username.'; return; }
     const match = family.find((p) => normalizeUsername(p.name) === input);
     if (!match) { err.textContent = 'No account found with that username.'; return; }
-    if (friends.some((f) => f.uid === match.uid)) { err.textContent = match.name + ' is already on your list.'; return; }
+    if (friends.some((f) => f.uid === match.uid)) { err.textContent = 'You’re already friends with ' + match.name + '.'; return; }
+    if (sentRequests.some((r) => r.uid === match.uid)) { err.textContent = 'You already sent ' + match.name + ' a request.'; return; }
+    if (friendRequests.some((r) => r.uid === match.uid)) { err.textContent = match.name + ' already sent you a request — check below.'; return; }
     $('friend-submit').disabled = true;
     try {
-      await set(ref(db, 'users/' + me.uid + '/friends/' + match.uid), { name: match.name, added: new Date().toISOString() });
+      await sendFriendRequest(match);
       $('friend-form').reset();
     } catch (e2) {
-      err.textContent = 'Couldn’t add (' + (e2.code || e2.message || 'error') + ') — try again.';
+      err.textContent = 'Couldn’t send a request (' + (e2.code || e2.message || 'error') + ').';
     } finally {
       $('friend-submit').disabled = false;
     }
@@ -1737,6 +1886,8 @@
     if (unsubscribe) { unsubscribe(); unsubscribe = null; }
     if (unsubscribeCollections) { unsubscribeCollections(); unsubscribeCollections = null; }
     if (unsubscribeFriends) { unsubscribeFriends(); unsubscribeFriends = null; }
+    if (unsubscribeFriendRequests) { unsubscribeFriendRequests(); unsubscribeFriendRequests = null; }
+    if (unsubscribeSentRequests) { unsubscribeSentRequests(); unsubscribeSentRequests = null; }
     if (unsubscribeShares) { unsubscribeShares(); unsubscribeShares = null; }
 
     if (!user) {
@@ -1748,6 +1899,9 @@
       collections = [];
       legacyCollections = [];
       friends = [];
+      friendRequests = [];
+      sentRequests = [];
+      updateRequestBadges();
       family = [];
       shareLog = {};
       route();
@@ -1785,6 +1939,25 @@
         .filter((f) => f && typeof f.name === 'string' && f.name);
       friends.sort((a, b) => a.name.localeCompare(b.name));
       renderFriendsList();
+      renderDiscoverList();
+    });
+
+    unsubscribeFriendRequests = onValue(ref(db, 'users/' + me.uid + '/friendRequests'), (snap) => {
+      const val = snap.val() || {};
+      friendRequests = Object.keys(val)
+        .map((uid) => ({ uid, name: (val[uid] || {}).name || 'Someone', sentAt: (val[uid] || {}).sentAt || '' }))
+        .filter((r) => r && typeof r.name === 'string' && r.name);
+      friendRequests.sort((a, b) => (b.sentAt || '').localeCompare(a.sentAt || ''));
+      renderRequestsList();
+      renderDiscoverList();
+      updateRequestBadges();
+    });
+
+    unsubscribeSentRequests = onValue(ref(db, 'users/' + me.uid + '/sentRequests'), (snap) => {
+      const val = snap.val() || {};
+      sentRequests = Object.keys(val)
+        .map((uid) => ({ uid, name: (val[uid] || {}).name || 'Someone', sentAt: (val[uid] || {}).sentAt || '' }))
+        .filter((r) => r && typeof r.name === 'string' && r.name);
       renderDiscoverList();
     });
 
