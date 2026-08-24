@@ -730,10 +730,12 @@
       </div>
       <div class="select-bar-actions">
         <button class="chip" type="button" id="select-all">Select all</button>
+        <button class="chip" type="button" id="select-add-collection">Add to collection</button>
         <button class="chip" type="button" id="select-share">Share</button>
         <button class="chip danger" type="button" id="select-delete">Delete</button>
       </div>
     </div>
+    <div id="select-collection-panel" class="share-panel" hidden></div>
     <div id="select-share-panel" class="share-panel" hidden></div>
     <div id="add-section" hidden>
       <h2 id="form-title">Add a quote</h2>
@@ -2411,6 +2413,7 @@
     $('select-toggle').setAttribute('aria-pressed', String(on));
     $('select-bar').hidden = !on;
     $('select-share-panel').hidden = true;
+    $('select-collection-panel').hidden = true;
     renderList();
   }
 
@@ -2494,6 +2497,70 @@
     panel.appendChild(row2);
     panel.appendChild(status);
   }
+
+  async function addSelectedToCollection(c, statusEl) {
+    const qs = getSelectedQuotes();
+    if (qs.length === 0) return;
+    statusEl.textContent = 'Adding to ' + c.name + '…';
+    let ok = 0;
+    for (const q of qs) {
+      try {
+        await push(ref(db, 'collections/' + c.id + '/quotes'), {
+          text: q.text, by: q.by || '', note: q.note || '',
+          added: new Date().toISOString(),
+          addedBy: me.name, addedByUid: me.uid
+        });
+        ok++;
+      } catch (e) { /* status reports the shortfall */ }
+    }
+    statusEl.textContent = ok === qs.length
+      ? '✓ Added ' + ok + ' quote' + (ok === 1 ? '' : 's') + ' to ' + c.name + '.'
+      : 'Added ' + ok + ' of ' + qs.length + ' to ' + c.name + ' — try again for the rest.';
+  }
+
+  function renderSelectCollectionPanel(keepMessage) {
+    const panel = $('select-collection-panel');
+    panel.textContent = '';
+    const status = document.createElement('p');
+    status.className = 'status';
+    if (keepMessage) status.textContent = keepMessage;
+
+    if (collections.length > 0) {
+      const t1 = document.createElement('p');
+      t1.className = 'share-title';
+      t1.textContent = 'Add the selected quotes to:';
+      panel.appendChild(t1);
+      const row = document.createElement('div');
+      row.className = 'share-row';
+      collections.forEach((c) => {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.textContent = c.name;
+        b.addEventListener('click', async () => {
+          await addSelectedToCollection(c, status);
+          renderSelectCollectionPanel(status.textContent);
+        });
+        row.appendChild(b);
+      });
+      panel.appendChild(row);
+    } else {
+      const t1 = document.createElement('p');
+      t1.className = 'share-title';
+      t1.textContent = 'You’re not in any collections yet — create or join one from the Collections tab.';
+      panel.appendChild(t1);
+    }
+    panel.appendChild(status);
+  }
+
+  $('select-add-collection').addEventListener('click', () => {
+    if (selectedIds.size === 0) {
+      alert('Select at least one quote first.');
+      return;
+    }
+    const panel = $('select-collection-panel');
+    if (panel.hidden) renderSelectCollectionPanel();
+    panel.hidden = !panel.hidden;
+  });
 
   $('select-share').addEventListener('click', () => {
     if (selectedIds.size === 0) {
