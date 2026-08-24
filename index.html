@@ -928,14 +928,9 @@
     <div class="member-row" id="cd-members"></div>
 
     <div id="cd-invite-wrap" hidden>
-      <form class="add" id="cd-invite-form">
-        <label>Add someone by username
-          <input id="cd-invite-username" required placeholder="their username">
-        </label>
-        <div class="form-actions">
-          <button class="primary" type="submit" id="cd-invite-submit">Add to collection</button>
-        </div>
-      </form>
+      <p class="share-title">Add from your friends</p>
+      <div class="share-row" id="cd-friend-picker"></div>
+      <p class="form-hint" id="cd-no-friends" hidden>You haven't added any friends yet — add them on the <a href="#/friends">Friends page</a> first, or use the join code below.</p>
     </div>
     <div class="code-row" id="cd-code-wrap" hidden>
       <span class="form-hint">Join code: <strong id="cd-code"></strong></span>
@@ -1363,25 +1358,42 @@
     }
   });
 
-  async function inviteToCollection(c, username, statusEl) {
-    const input = normalizeUsername(username);
-    if (!input) { statusEl.textContent = 'Enter a username.'; return; }
-    const match = family.find((p) => normalizeUsername(p.name) === input);
-    if (!match) { statusEl.textContent = 'No account found with that username.'; return; }
-    if (c.members && c.members[match.uid]) {
-      statusEl.textContent = match.name + ' is already in this collection.';
+  async function inviteToCollection(c, person, statusEl) {
+    if (c.members && c.members[person.uid]) {
+      statusEl.textContent = person.name + ' is already in this collection.';
       return;
     }
-    statusEl.textContent = 'Adding ' + match.name + '…';
+    statusEl.textContent = 'Adding ' + person.name + '…';
     try {
-      await set(ref(db, 'collections/' + c.id + '/members/' + match.uid), {
-        name: match.name, joined: new Date().toISOString(), code: c.code || ''
+      await set(ref(db, 'collections/' + c.id + '/members/' + person.uid), {
+        name: person.name, joined: new Date().toISOString(), code: c.code || ''
       });
-      await set(ref(db, 'users/' + match.uid + '/collections/' + c.id), true);
-      statusEl.textContent = '✓ Added ' + match.name + ' — they’ll see it right away.';
+      await set(ref(db, 'users/' + person.uid + '/collections/' + c.id), true);
+      statusEl.textContent = '✓ Added ' + person.name + ' — they’ll see it right away.';
     } catch (e) {
-      statusEl.textContent = 'Couldn’t add ' + match.name + ' (' + (e.code || e.message || 'error') + ').';
+      statusEl.textContent = 'Couldn’t add ' + person.name + ' (' + (e.code || e.message || 'error') + ').';
     }
+  }
+
+  function renderFriendPicker(c) {
+    const wrap = $('cd-friend-picker');
+    wrap.textContent = '';
+    $('cd-no-friends').hidden = friends.length > 0;
+    friends.forEach((f) => {
+      const isMember = !!(c.members && c.members[f.uid]);
+      const b = document.createElement('button');
+      b.type = 'button';
+      if (isMember) {
+        b.textContent = '✓ ' + f.name;
+        b.className = 'shared-already';
+        b.disabled = true;
+        b.title = f.name + ' is already in this collection';
+      } else {
+        b.textContent = f.name;
+        b.addEventListener('click', () => inviteToCollection(c, f, $('cd-invite-status')));
+      }
+      wrap.appendChild(b);
+    });
   }
 
   async function leaveCollection(c) {
@@ -1415,6 +1427,7 @@
 
     /* Owner-only controls */
     $('cd-invite-wrap').hidden = !isOwner(c);
+    if (isOwner(c)) renderFriendPicker(c);
     $('cd-code-wrap').hidden = !c.code;
     if (c.code) $('cd-code').textContent = c.code;
     $('cd-delete').hidden = !isOwner(c);
@@ -1500,19 +1513,6 @@
       status.textContent = 'Couldn’t add (' + (e2.code || e2.message || 'error') + ').';
     } finally {
       $('cd-submit').disabled = false;
-    }
-  });
-
-  $('cd-invite-form').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const c = collections.find((x) => x.id === activeCollectionId);
-    if (!c) return;
-    $('cd-invite-submit').disabled = true;
-    try {
-      await inviteToCollection(c, $('cd-invite-username').value, $('cd-invite-status'));
-      $('cd-invite-form').reset();
-    } finally {
-      $('cd-invite-submit').disabled = false;
     }
   });
 
