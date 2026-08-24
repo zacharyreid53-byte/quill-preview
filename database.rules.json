@@ -26,7 +26,7 @@
         "members": {
           ".read": "auth != null && data.child(auth.uid).exists()",
           "$muid": {
-            ".write": "auth != null && (root.child('collections').child($cid).child('meta').child('ownerUid').val() === auth.uid || (auth.uid === $muid && !newData.exists()))",
+            ".write": "auth != null && (root.child('collections').child($cid).child('meta').child('ownerUid').val() === auth.uid || (auth.uid === $muid && (!newData.exists() || root.child('collections').child($cid).child('invites').child(auth.uid).exists())))",
             ".validate": "!newData.exists() || (newData.child('name').isString() && newData.child('name').val().length > 0 && newData.child('name').val().length <= 60)"
           }
         },
@@ -34,6 +34,13 @@
           ".read": "auth != null && root.child('collections').child($cid).child('meta').child('ownerUid').val() === auth.uid",
           "$ruid": {
             ".write": "auth != null && (auth.uid === $ruid || root.child('collections').child($cid).child('meta').child('ownerUid').val() === auth.uid)",
+            ".validate": "!newData.exists() || (newData.child('name').isString() && newData.child('name').val().length > 0 && newData.child('name').val().length <= 60)"
+          }
+        },
+        "invites": {
+          ".read": "auth != null && root.child('collections').child($cid).child('meta').child('ownerUid').val() === auth.uid",
+          "$iuid": {
+            ".write": "auth != null && (auth.uid === $iuid || root.child('collections').child($cid).child('meta').child('ownerUid').val() === auth.uid)",
             ".validate": "!newData.exists() || (newData.child('name').isString() && newData.child('name').val().length > 0 && newData.child('name').val().length <= 60)"
           }
         },
@@ -84,6 +91,13 @@
           }
         },
         "sentJoinRequests": {
+          ".read": "auth != null && auth.uid === $uid",
+          "$cid": {
+            ".write": "auth != null && (auth.uid === $uid || root.child('collections').child($cid).child('meta').child('ownerUid').val() === auth.uid)",
+            ".validate": "!newData.exists() || (newData.child('name').isString() && newData.child('name').val().length > 0 && newData.child('name').val().length <= 60)"
+          }
+        },
+        "collectionInvites": {
           ".read": "auth != null && auth.uid === $uid",
           "$cid": {
             ".write": "auth != null && (auth.uid === $uid || root.child('collections').child($cid).child('meta').child('ownerUid').val() === auth.uid)",
