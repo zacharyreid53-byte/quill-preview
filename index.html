@@ -1973,7 +1973,13 @@
      cancelling always clears both sides. */
   async function sendFriendRequest(person) {
     const now = new Date().toISOString();
-    await set(ref(db, 'users/' + person.uid + '/friendRequests/' + me.uid), { name: me.name, sentAt: now });
+    try {
+      await set(ref(db, 'users/' + person.uid + '/friendRequests/' + me.uid), { name: me.name, sentAt: now });
+    } catch (e) {
+      const wrapped = new Error('[write#1 me=' + me.uid + ' target=' + person.uid + '] ' + e.message);
+      wrapped.code = e.code;
+      throw wrapped;
+    }
     await set(ref(db, 'users/' + me.uid + '/sentRequests/' + person.uid), { name: person.name, sentAt: now });
   }
 
@@ -2104,7 +2110,7 @@
           try {
             await sendFriendRequest(p);
           } catch (e) {
-            alert('Couldn’t send a request to ' + p.name + ' (' + (e.code || e.message || 'error') + ').');
+            alert('Couldn’t send a request to ' + p.name + ' (' + (e.code || 'error') + ') ' + (e.message || ''));
             addBtn.disabled = false;
           }
         });
