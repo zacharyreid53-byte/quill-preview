@@ -11,7 +11,8 @@
     "collectionCodes": {
       "$code": {
         ".read": "auth != null",
-        ".write": "auth != null && (!data.exists() || root.child('collections').child(data.val()).child('meta').child('ownerUid').val() === auth.uid)"
+        ".write": "auth != null && (!data.exists() || root.child('collections').child(data.child('cid').val()).child('meta').child('ownerUid').val() === auth.uid)",
+        ".validate": "!newData.exists() || (newData.child('cid').isString() && newData.child('name').isString())"
       }
     },
 
@@ -25,7 +26,14 @@
         "members": {
           ".read": "auth != null && data.child(auth.uid).exists()",
           "$muid": {
-            ".write": "auth != null && (root.child('collections').child($cid).child('meta').child('ownerUid').val() === auth.uid || (auth.uid === $muid && (!newData.exists() || root.child('collectionCodes').child(newData.child('code').val()).val() === $cid)))",
+            ".write": "auth != null && (root.child('collections').child($cid).child('meta').child('ownerUid').val() === auth.uid || (auth.uid === $muid && !newData.exists()))",
+            ".validate": "!newData.exists() || (newData.child('name').isString() && newData.child('name').val().length > 0 && newData.child('name').val().length <= 60)"
+          }
+        },
+        "joinRequests": {
+          ".read": "auth != null && root.child('collections').child($cid).child('meta').child('ownerUid').val() === auth.uid",
+          "$ruid": {
+            ".write": "auth != null && (auth.uid === $ruid || root.child('collections').child($cid).child('meta').child('ownerUid').val() === auth.uid)",
             ".validate": "!newData.exists() || (newData.child('name').isString() && newData.child('name').val().length > 0 && newData.child('name').val().length <= 60)"
           }
         },
@@ -72,6 +80,13 @@
           ".read": "auth != null && auth.uid === $uid",
           "$toUid": {
             ".write": "auth != null && (auth.uid === $uid || auth.uid === $toUid)",
+            ".validate": "!newData.exists() || (newData.child('name').isString() && newData.child('name').val().length > 0 && newData.child('name').val().length <= 60)"
+          }
+        },
+        "sentJoinRequests": {
+          ".read": "auth != null && auth.uid === $uid",
+          "$cid": {
+            ".write": "auth != null && (auth.uid === $uid || root.child('collections').child($cid).child('meta').child('ownerUid').val() === auth.uid)",
             ".validate": "!newData.exists() || (newData.child('name').isString() && newData.child('name').val().length > 0 && newData.child('name').val().length <= 60)"
           }
         },

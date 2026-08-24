@@ -507,6 +507,7 @@
     border-radius: 999px;
     padding: 0.1rem 0.45rem;
   }
+  ul.collections .col-badge.requests { color: #fff; background: var(--danger); }
   ul.collections li.legacy { border-style: dashed; }
   ul.collections .col-name-static { flex: 1; font-size: 1rem; font-weight: 600; color: var(--ink); }
 
@@ -923,10 +924,16 @@
         <input id="join-code" required maxlength="12" autocapitalize="characters" spellcheck="false" placeholder="the 8-character code you were given">
       </label>
       <div class="form-actions">
-        <button class="primary" type="submit" id="join-submit">Join</button>
+        <button class="primary" type="submit" id="join-submit">Request to join</button>
         <p class="form-error" id="join-error"></p>
       </div>
+      <p class="form-hint">The owner has to accept before you're in.</p>
     </form>
+  </section>
+
+  <section id="sent-join-section" hidden>
+    <h2>Requests you've sent</h2>
+    <ul class="friends" id="sent-join-list"></ul>
   </section>
 
   <section>
@@ -960,6 +967,10 @@
       <p class="share-title">Add from your friends</p>
       <div class="share-row" id="cd-friend-picker"></div>
       <p class="form-hint" id="cd-no-friends" hidden>You haven't added any friends yet — add them on the <a href="#/friends">Friends page</a> first, or use the join code below.</p>
+    </div>
+    <div id="cd-requests-section" hidden>
+      <p class="share-title">Join requests</p>
+      <ul class="friends" id="cd-requests-list"></ul>
     </div>
     <div class="code-row" id="cd-code-wrap" hidden>
       <span class="form-hint">Join code: <strong id="cd-code"></strong></span>
@@ -1047,7 +1058,7 @@
 <div id="drawer-overlay" hidden></div>
 <nav id="nav-drawer" hidden aria-label="Main navigation">
   <button type="button" class="drawer-link" id="drawer-quotes" aria-current="page">Quotes</button>
-  <button type="button" class="drawer-link" id="drawer-collections">Collections</button>
+  <button type="button" class="drawer-link" id="drawer-collections">Collections <span class="drawer-badge" id="collections-req-badge" hidden></span></button>
   <button type="button" class="drawer-link" id="drawer-friends">Friends <span class="drawer-badge" id="friends-req-badge" hidden></span></button>
 </nav>
 
@@ -1098,7 +1109,9 @@
   let activeCollectionId = null;
   let collectionQuotes = [];   /* quotes of the open collection */
   let unsubscribeCollectionQuotes = null;
-  const collectionUnsubs = new Map(); /* cid -> [unsub, ...] for meta/members */
+  const collectionUnsubs = new Map(); /* cid -> [unsub, ...] for meta/members/joinRequests */
+  let unsubscribeSentJoinRequests = null;
+  let sentJoinRequests = []; /* my own outgoing "let me join" requests, awaiting an owner */
   let editingId = null;
   let openId = null;
   let favOnly = false;
@@ -1215,7 +1228,12 @@
       const onMembers = onValue(ref(db, 'collections/' + cid + '/members'), (s) => {
         upsertCollection(cid, { members: s.val() || {} });
       }, () => upsertCollection(cid, { members: {} }));
-      collectionUnsubs.set(cid, [onMeta, onMembers]);
+      /* Only the owner can actually read this node; for everyone else it
+         permission-denies and we just treat that as "no requests". */
+      const onJoinReqs = onValue(ref(db, 'collections/' + cid + '/joinRequests'), (s) => {
+        upsertCollection(cid, { joinRequests: s.val() || {} });
+      }, () => upsertCollection(cid, { joinRequests: {} }));
+      collectionUnsubs.set(cid, [onMeta, onMembers, onJoinReqs]);
     });
 
     if (activeCollectionId && !wanted.has(activeCollectionId)) setActiveCollection(null);
@@ -1233,14 +1251,21 @@
       c.code = patch.meta && patch.meta.code;
     }
     if ('members' in patch) c.members = patch.members || {};
+    if ('joinRequests' in patch) c.joinRequests = patch.joinRequests || {};
     c.memberCount = Object.keys(c.members || {}).length;
     collections.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
     refreshCollectionViews();
+    updateRequestBadges();
   }
 
   function refreshCollectionViews() {
     renderCollectionsList();
+    renderSentJoinRequestsList();
     if (activeCollectionId) renderCollectionDetail();
+  }
+
+  function totalJoinRequests() {
+    return collections.reduce((sum, c) => sum + (isOwner(c) ? Object.keys(c.joinRequests || {}).length : 0), 0);
   }
 
   function isOwner(c) { return c && c.ownerUid === (me && me.uid); }
@@ -1294,6 +1319,13 @@
         badge.className = 'col-badge';
         badge.textContent = 'owner';
         li.appendChild(badge);
+        const reqCount = Object.keys(c.joinRequests || {}).length;
+        if (reqCount > 0) {
+          const reqBadge = document.createElement('span');
+          reqBadge.className = 'col-badge requests';
+          reqBadge.textContent = reqCount + ' request' + (reqCount === 1 ? '' : 's');
+          li.appendChild(reqBadge);
+        }
       }
 
       const openBtn = document.createElement('button');
@@ -1329,6 +1361,46 @@
     }
   }
 
+  function renderSentJoinRequestsList() {
+    const section = $('sent-join-section');
+    if (!section) return;
+    section.hidden = sentJoinRequests.length === 0;
+    const list = $('sent-join-list');
+    list.textContent = '';
+
+    sentJoinRequests.forEach((r) => {
+      const li = document.createElement('li');
+
+      const name = document.createElement('span');
+      name.className = 'friend-name';
+      name.textContent = r.name;
+      li.appendChild(name);
+
+      const status = document.createElement('span');
+      status.className = 'col-count';
+      status.textContent = 'Requested';
+      li.appendChild(status);
+
+      const cancelBtn = document.createElement('button');
+      cancelBtn.type = 'button';
+      cancelBtn.className = 'quiet';
+      cancelBtn.textContent = 'Cancel';
+      cancelBtn.addEventListener('click', async () => {
+        cancelBtn.disabled = true;
+        try {
+          await remove(ref(db, 'users/' + me.uid + '/sentJoinRequests/' + r.cid));
+          await remove(ref(db, 'collections/' + r.cid + '/joinRequests/' + me.uid));
+        } catch (e) {
+          alert('Couldn’t cancel (' + (e.code || e.message || 'error') + ').');
+          cancelBtn.disabled = false;
+        }
+      });
+      li.appendChild(cancelBtn);
+
+      list.appendChild(li);
+    });
+  }
+
   function openCollection(cid) {
     setActiveCollection(cid);
     location.hash = '#/collection';
@@ -1339,7 +1411,7 @@
   async function createCollection(name) {
     const cid = push(ref(db, 'collections')).key;
     const code = makeJoinCode();
-    await set(ref(db, 'collectionCodes/' + code), cid);
+    await set(ref(db, 'collectionCodes/' + code), { cid, name });
     await set(ref(db, 'collections/' + cid + '/meta'), {
       name, ownerUid: me.uid, ownerName: me.name, code, created: new Date().toISOString()
     });
@@ -1371,8 +1443,9 @@
     }
   });
 
-  /* Join by code: look up the code, then write ourselves in. The rule checks
-     the code we submit really maps to this collection. */
+  /* Join by code: look up the code, then send a join request — the owner
+     has to accept it, same as a friend request. The code proves you were
+     actually given it; it doesn't add you on its own. */
   $('join-form').addEventListener('submit', async (e) => {
     e.preventDefault();
     const err = $('join-error');
@@ -1382,21 +1455,26 @@
     $('join-submit').disabled = true;
     try {
       const snap = await get(ref(db, 'collectionCodes/' + code));
-      const cid = snap.val();
-      if (!cid) { err.textContent = 'No collection has that code.'; return; }
+      const info = snap.val();
+      if (!info || !info.cid) { err.textContent = 'No collection has that code.'; return; }
+      const cid = info.cid;
+      const name = info.name || 'this collection';
       if (collections.some((c) => c.id === cid)) {
         err.textContent = 'You’re already in that collection.';
         return;
       }
-      await set(ref(db, 'collections/' + cid + '/members/' + me.uid), {
-        name: me.name, joined: new Date().toISOString(), code
-      });
-      await set(ref(db, 'users/' + me.uid + '/collections/' + cid), true);
+      if (sentJoinRequests.some((r) => r.cid === cid)) {
+        err.textContent = 'You already asked to join “' + name + '” — waiting on the owner.';
+        return;
+      }
+      const now = new Date().toISOString();
+      await set(ref(db, 'collections/' + cid + '/joinRequests/' + me.uid), { name: me.name, sentAt: now });
+      await set(ref(db, 'users/' + me.uid + '/sentJoinRequests/' + cid), { name, sentAt: now });
       $('join-form').reset();
       err.textContent = '';
-      openCollection(cid);
+      alert('Request sent — you’ll see “' + name + '” once the owner accepts.');
     } catch (e2) {
-      err.textContent = 'Couldn’t join (' + (e2.code || e2.message || 'error') + ').';
+      err.textContent = 'Couldn’t send the request (' + (e2.code || e2.message || 'error') + ').';
     } finally {
       $('join-submit').disabled = false;
     }
@@ -1440,6 +1518,71 @@
     });
   }
 
+  async function respondToJoinRequest(c, r, accept) {
+    if (accept) {
+      await set(ref(db, 'collections/' + c.id + '/members/' + r.uid), {
+        name: r.name, joined: new Date().toISOString(), code: c.code || ''
+      });
+      await set(ref(db, 'users/' + r.uid + '/collections/' + c.id), true);
+    }
+    await remove(ref(db, 'collections/' + c.id + '/joinRequests/' + r.uid));
+    await remove(ref(db, 'users/' + r.uid + '/sentJoinRequests/' + c.id));
+  }
+
+  function renderJoinRequests(c) {
+    const section = $('cd-requests-section');
+    const requests = Object.keys(c.joinRequests || {})
+      .map((uid) => ({ uid, name: (c.joinRequests[uid] || {}).name || 'Someone' }));
+    section.hidden = !isOwner(c) || requests.length === 0;
+    if (section.hidden) return;
+
+    const list = $('cd-requests-list');
+    list.textContent = '';
+    requests.forEach((r) => {
+      const li = document.createElement('li');
+
+      const name = document.createElement('span');
+      name.className = 'friend-name';
+      name.textContent = r.name;
+      li.appendChild(name);
+
+      const acceptBtn = document.createElement('button');
+      acceptBtn.type = 'button';
+      acceptBtn.textContent = 'Accept';
+      acceptBtn.addEventListener('click', async () => {
+        acceptBtn.disabled = true;
+        declineBtn.disabled = true;
+        try {
+          await respondToJoinRequest(c, r, true);
+        } catch (e) {
+          alert('Couldn’t accept (' + (e.code || e.message || 'error') + ').');
+          acceptBtn.disabled = false;
+          declineBtn.disabled = false;
+        }
+      });
+      li.appendChild(acceptBtn);
+
+      const declineBtn = document.createElement('button');
+      declineBtn.type = 'button';
+      declineBtn.className = 'quiet danger';
+      declineBtn.textContent = 'Decline';
+      declineBtn.addEventListener('click', async () => {
+        acceptBtn.disabled = true;
+        declineBtn.disabled = true;
+        try {
+          await respondToJoinRequest(c, r, false);
+        } catch (e) {
+          alert('Couldn’t decline (' + (e.code || e.message || 'error') + ').');
+          acceptBtn.disabled = false;
+          declineBtn.disabled = false;
+        }
+      });
+      li.appendChild(declineBtn);
+
+      list.appendChild(li);
+    });
+  }
+
   async function leaveCollection(c) {
     if (!confirm('Leave “' + c.name + '”? You’ll stop seeing its quotes.')) return;
     try {
@@ -1472,6 +1615,7 @@
     /* Owner-only controls */
     $('cd-invite-wrap').hidden = !isOwner(c);
     if (isOwner(c)) renderFriendPicker(c);
+    renderJoinRequests(c);
     $('cd-code-wrap').hidden = !c.code;
     if (c.code) $('cd-code').textContent = c.code;
     $('cd-delete').hidden = !isOwner(c);
@@ -1638,10 +1782,15 @@
     if (!confirm('Delete “' + c.name + '” for everyone? Its quotes are deleted too. This can’t be undone.')) return;
     try {
       const members = Object.keys(c.members || {});
+      const pendingRequesters = Object.keys(c.joinRequests || {});
       await remove(ref(db, 'collections/' + c.id + '/quotes'));
       for (const uid of members) {
         await remove(ref(db, 'collections/' + c.id + '/members/' + uid));
         await remove(ref(db, 'users/' + uid + '/collections/' + c.id));
+      }
+      for (const uid of pendingRequesters) {
+        await remove(ref(db, 'users/' + uid + '/sentJoinRequests/' + c.id));
+        await remove(ref(db, 'collections/' + c.id + '/joinRequests/' + uid));
       }
       if (c.code) await remove(ref(db, 'collectionCodes/' + c.code));
       await remove(ref(db, 'collections/' + c.id + '/meta'));
@@ -1681,10 +1830,13 @@
   }
 
   function updateRequestBadges() {
-    const n = friendRequests.length;
-    document.querySelectorAll('.nav-toggle-btn').forEach((b) => b.classList.toggle('has-requests', n > 0));
-    const badge = $('friends-req-badge');
-    if (badge) { badge.textContent = String(n); badge.hidden = n === 0; }
+    const friendCount = friendRequests.length;
+    const joinCount = totalJoinRequests();
+    document.querySelectorAll('.nav-toggle-btn').forEach((b) => b.classList.toggle('has-requests', friendCount + joinCount > 0));
+    const friendBadge = $('friends-req-badge');
+    if (friendBadge) { friendBadge.textContent = String(friendCount); friendBadge.hidden = friendCount === 0; }
+    const collBadge = $('collections-req-badge');
+    if (collBadge) { collBadge.textContent = String(joinCount); collBadge.hidden = joinCount === 0; }
   }
 
   function renderRequestsList() {
@@ -1888,6 +2040,7 @@
     if (unsubscribeFriends) { unsubscribeFriends(); unsubscribeFriends = null; }
     if (unsubscribeFriendRequests) { unsubscribeFriendRequests(); unsubscribeFriendRequests = null; }
     if (unsubscribeSentRequests) { unsubscribeSentRequests(); unsubscribeSentRequests = null; }
+    if (unsubscribeSentJoinRequests) { unsubscribeSentJoinRequests(); unsubscribeSentJoinRequests = null; }
     if (unsubscribeShares) { unsubscribeShares(); unsubscribeShares = null; }
 
     if (!user) {
@@ -1898,6 +2051,7 @@
       setActiveCollection(null);
       collections = [];
       legacyCollections = [];
+      sentJoinRequests = [];
       friends = [];
       friendRequests = [];
       sentRequests = [];
@@ -1959,6 +2113,14 @@
         .map((uid) => ({ uid, name: (val[uid] || {}).name || 'Someone', sentAt: (val[uid] || {}).sentAt || '' }))
         .filter((r) => r && typeof r.name === 'string' && r.name);
       renderDiscoverList();
+    });
+
+    unsubscribeSentJoinRequests = onValue(ref(db, 'users/' + me.uid + '/sentJoinRequests'), (snap) => {
+      const val = snap.val() || {};
+      sentJoinRequests = Object.keys(val)
+        .map((cid) => ({ cid, name: (val[cid] || {}).name || 'a collection', sentAt: (val[cid] || {}).sentAt || '' }))
+        .filter((r) => r && typeof r.name === 'string' && r.name);
+      renderSentJoinRequestsList();
     });
 
     unsubscribeShares = onValue(ref(db, 'users/' + me.uid + '/shares'), (snap) => {
