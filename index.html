@@ -275,7 +275,7 @@
     margin: 0 0 0.75rem;
   }
 
-  #add-section { margin-top: 1rem; }
+  #add-section, #cd-add-section { margin-top: 1rem; }
   form.add, .panel {
     background: var(--card);
     border: 1px solid var(--line);
@@ -519,8 +519,17 @@
     letter-spacing: 0.08em;
     color: var(--ink);
   }
-  #cd-invite-wrap[hidden] { display: none; }
   #cd-name { margin-bottom: 0.2rem; }
+  .people-block {
+    background: var(--paper);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    padding: 0.75rem;
+    margin-bottom: 0.75rem;
+  }
+  .people-block:last-child { margin-bottom: 0; }
+  .section-head { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; margin-bottom: 0.75rem; }
+  .section-head h2 { margin: 0; }
 
   .actions {
     margin-top: 0.75rem;
@@ -962,51 +971,72 @@
     <h2 id="cd-name"></h2>
     <p class="form-hint" id="cd-owner"></p>
     <div class="member-row" id="cd-members"></div>
+  </section>
 
-    <div id="cd-invite-wrap" hidden>
-      <p class="share-title">Add from your friends</p>
+  <section id="cd-manage-section" hidden>
+    <h2>Add people</h2>
+
+    <div id="cd-invite-wrap" class="people-block">
+      <p class="share-title">From your friends</p>
       <div class="share-row" id="cd-friend-picker"></div>
-      <p class="form-hint" id="cd-no-friends" hidden>You haven't added any friends yet — add them on the <a href="#/friends">Friends page</a> first, or use the join code below.</p>
+      <p class="form-hint" id="cd-no-friends" hidden>You haven't added any friends yet — add them on the <a href="#/friends">Friends page</a>, or invite by username below.</p>
     </div>
-    <div id="cd-requests-section" hidden>
-      <p class="share-title">Join requests</p>
-      <ul class="friends" id="cd-requests-list"></ul>
-    </div>
-    <div class="code-row" id="cd-code-wrap" hidden>
-      <span class="form-hint">Join code: <strong id="cd-code"></strong></span>
+
+    <form class="add" id="cd-invite-username-form">
+      <label>Invite by username
+        <input id="cd-invite-username" placeholder="their username">
+      </label>
+      <div class="form-actions">
+        <button class="primary" type="submit" id="cd-invite-username-submit">Send invite</button>
+        <p class="form-error" id="cd-invite-username-error"></p>
+      </div>
+    </form>
+
+    <div class="people-block code-row" id="cd-code-wrap" hidden>
+      <span class="form-hint">Or share the join code: <strong id="cd-code"></strong></span>
       <button type="button" class="quiet" id="cd-copy-code">Copy code</button>
     </div>
-    <p class="status" id="cd-invite-status"></p>
 
+    <p class="status" id="cd-invite-status"></p>
+  </section>
+
+  <section id="cd-requests-section" hidden>
+    <h2>Join requests</h2>
+    <ul class="friends" id="cd-requests-list"></ul>
+  </section>
+
+  <section>
+    <div class="section-head">
+      <h2>Quotes in this collection</h2>
+      <button class="primary icon-btn" id="cd-add-quote-toggle" type="button" aria-label="Add a quote">+</button>
+    </div>
+    <div id="cd-add-section" hidden>
+      <form class="add" id="cd-add-form">
+        <label>The quote
+          <textarea id="cd-text" required placeholder="Write it the way they said it&hellip;"></textarea>
+        </label>
+        <label>Who said it
+          <input id="cd-by" required placeholder="Uncle Ray, Mom, Dave from next door&hellip;">
+        </label>
+        <label>Context <span style="text-transform:none; letter-spacing:0;">(optional)</span>
+          <input id="cd-note" placeholder="Thanksgiving 2019, after the turkey incident">
+        </label>
+        <div class="form-actions">
+          <button class="primary" type="submit" id="cd-submit">Save quote</button>
+          <button type="button" id="cd-cancel">Cancel</button>
+          <p class="form-hint" id="cd-status"></p>
+        </div>
+      </form>
+    </div>
+    <ul class="quotes" id="cd-list"></ul>
+    <div class="empty" id="cd-empty" hidden>Nothing here yet — add the first one above.</div>
+  </section>
+
+  <section>
     <div class="backup-actions">
       <button type="button" class="quiet danger" id="cd-leave" hidden>Leave collection</button>
       <button type="button" class="quiet danger" id="cd-delete" hidden>Delete for everyone</button>
     </div>
-  </section>
-
-  <section>
-    <h2>Add a quote here</h2>
-    <form class="add" id="cd-add-form">
-      <label>The quote
-        <textarea id="cd-text" required placeholder="Write it the way they said it&hellip;"></textarea>
-      </label>
-      <label>Who said it
-        <input id="cd-by" required placeholder="Uncle Ray, Mom, Dave from next door&hellip;">
-      </label>
-      <label>Context <span style="text-transform:none; letter-spacing:0;">(optional)</span>
-        <input id="cd-note" placeholder="Thanksgiving 2019, after the turkey incident">
-      </label>
-      <div class="form-actions">
-        <button class="primary" type="submit" id="cd-submit">Add to collection</button>
-        <p class="form-hint" id="cd-status"></p>
-      </div>
-    </form>
-  </section>
-
-  <section>
-    <h2>Quotes in this collection</h2>
-    <ul class="quotes" id="cd-list"></ul>
-    <div class="empty" id="cd-empty" hidden>Nothing here yet — add the first one above.</div>
   </section>
 </div>
 
@@ -1289,6 +1319,7 @@
 
   function setActiveCollection(id) {
     activeCollectionId = id;
+    closeCollectionAddSection();
     if (unsubscribeCollectionQuotes) { unsubscribeCollectionQuotes(); unsubscribeCollectionQuotes = null; }
     collectionQuotes = [];
     if (!id) return;
@@ -1705,7 +1736,7 @@
     });
 
     /* Owner-only controls */
-    $('cd-invite-wrap').hidden = !isOwner(c);
+    $('cd-manage-section').hidden = !isOwner(c);
     if (isOwner(c)) renderFriendPicker(c);
     renderJoinRequests(c);
     $('cd-code-wrap').hidden = !c.code;
@@ -1768,6 +1799,41 @@
     });
     $('cd-count').textContent = collectionQuotes.length === 1 ? '1 quote' : collectionQuotes.length + ' quotes';
   }
+
+  function openCollectionAddSection() {
+    $('cd-add-section').hidden = false;
+    $('cd-add-quote-toggle').hidden = true;
+  }
+
+  function closeCollectionAddSection() {
+    $('cd-add-section').hidden = true;
+    $('cd-add-quote-toggle').hidden = false;
+    $('cd-add-form').reset();
+    $('cd-status').textContent = '';
+  }
+
+  $('cd-add-quote-toggle').addEventListener('click', openCollectionAddSection);
+  $('cd-cancel').addEventListener('click', closeCollectionAddSection);
+
+  $('cd-invite-username-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const c = collections.find((x) => x.id === activeCollectionId);
+    if (!c) return;
+    const err = $('cd-invite-username-error');
+    err.textContent = '';
+    const input = normalizeUsername($('cd-invite-username').value);
+    if (!input) { err.textContent = 'Enter a username.'; return; }
+    if (input === normalizeUsername(me.name)) { err.textContent = 'That’s your own username.'; return; }
+    const match = family.find((p) => normalizeUsername(p.name) === input);
+    if (!match) { err.textContent = 'No account found with that username.'; return; }
+    $('cd-invite-username-submit').disabled = true;
+    try {
+      await inviteToCollection(c, match, $('cd-invite-status'));
+      $('cd-invite-username-form').reset();
+    } finally {
+      $('cd-invite-username-submit').disabled = false;
+    }
+  });
 
   $('cd-add-form').addEventListener('submit', async (e) => {
     e.preventDefault();
