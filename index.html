@@ -510,6 +510,40 @@
   ul.collections li.clickable:hover { border-color: var(--accent); }
   ul.collections .col-name-static { flex: 1; font-size: 1rem; font-weight: 600; color: var(--ink); }
 
+  /* Both of these carry their own [hidden] rules: an unconditional display
+     would otherwise beat the UA's [hidden] { display: none }. */
+  #notes[hidden] { display: none; }
+  .note-card[hidden] { display: none; }
+  .note-card {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.6rem;
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-left: 3px solid var(--accent);
+    border-radius: 4px;
+    padding: 0.7rem 0.8rem;
+  }
+  .note-card + .note-card { margin-top: 0.6rem; }
+  .note-icon { font-size: 1rem; line-height: 1.5; }
+  .note-body {
+    flex: 1;
+    margin: 0;
+    font-size: 0.85rem;
+    line-height: 1.5;
+    color: var(--ink-soft);
+  }
+  .note-body strong { color: var(--ink); font-weight: 600; }
+  .note-dismiss {
+    border: none;
+    background: none;
+    color: var(--ink-soft);
+    font-size: 1.1rem;
+    line-height: 1;
+    padding: 0.1rem 0.25rem;
+    cursor: pointer;
+  }
+
   .member-row { display: flex; gap: 0.4rem; flex-wrap: wrap; margin: 0.6rem 0; }
   .member-chip {
     font-size: 0.8rem;
@@ -742,6 +776,19 @@
       </div>
     </div>
   </header>
+
+  <div id="notes" hidden>
+    <div class="note-card" id="privacy-note" hidden>
+      <span class="note-icon" aria-hidden="true">&#128274;</span>
+      <p class="note-body"><strong>Your quotes are private.</strong> Nobody else can see what you save here &mdash; not unless you share a quote with a friend, or add it to a collection.</p>
+      <button type="button" class="note-dismiss" id="privacy-note-x" aria-label="Dismiss this note">&times;</button>
+    </div>
+    <div class="note-card" id="install-note" hidden>
+      <span class="note-icon" aria-hidden="true">&#128241;</span>
+      <p class="note-body"><strong>Keep Quill on your Home Screen.</strong> <span id="install-note-how"></span></p>
+      <button type="button" class="note-dismiss" id="install-note-x" aria-label="Dismiss this note">&times;</button>
+    </div>
+  </div>
 
   <section>
     <h2>The collection</h2>
@@ -3293,6 +3340,49 @@
     setSelectMode(false);
     alert('Deleted ' + done + ' of ' + ids.length + ' selected quotes.');
   });
+
+  /* ---- Intro notes ---- */
+  const PRIVACY_NOTE_KEY = 'quill.note.privacy.v1';
+  const INSTALL_NOTE_KEY = 'quill.note.install.v1';
+
+  /* Private browsing can throw on localStorage, so every access is guarded —
+     a note that can't remember being dismissed is better than a broken page. */
+  function noteDismissed(key) {
+    try { return localStorage.getItem(key) === '1'; } catch (e) { return false; }
+  }
+
+  function dismissNote(key) {
+    try { localStorage.setItem(key, '1'); } catch (e) { /* hidden for this visit only */ }
+    updateNotes();
+  }
+
+  function alreadyInstalled() {
+    try {
+      if (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) return true;
+    } catch (e) { /* older browsers */ }
+    return window.navigator.standalone === true;
+  }
+
+  function installHowText() {
+    const ua = navigator.userAgent || '';
+    if (/iphone|ipad|ipod/i.test(ua)) {
+      return 'Tap the Share button at the bottom of Safari, then “Add to Home Screen”. It opens like a real app, without the browser bars.';
+    }
+    return 'Open your browser’s menu, then “Add to Home Screen” (some phones call it “Install app”). It opens like a real app, without the browser bars.';
+  }
+
+  function updateNotes() {
+    const showPrivacy = !noteDismissed(PRIVACY_NOTE_KEY);
+    const showInstall = !noteDismissed(INSTALL_NOTE_KEY) && !alreadyInstalled();
+    $('privacy-note').hidden = !showPrivacy;
+    $('install-note').hidden = !showInstall;
+    $('notes').hidden = !showPrivacy && !showInstall;
+    if (showInstall) $('install-note-how').textContent = installHowText();
+  }
+
+  $('privacy-note-x').addEventListener('click', () => dismissNote(PRIVACY_NOTE_KEY));
+  $('install-note-x').addEventListener('click', () => dismissNote(INSTALL_NOTE_KEY));
+  updateNotes();
 
   /* ---- Add / edit / delete ---- */
   const NOTE_PLACEHOLDER = 'Thanksgiving 2019, after the turkey incident';
