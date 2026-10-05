@@ -914,6 +914,12 @@
       <button type="button" id="backup-copy">Copy my collection</button>
       <button type="button" id="backup-load">Add these quotes</button>
     </div>
+    <p class="form-hint">Moving to a different account? Download your quotes as a file here, sign in to the other account, come back to this page and choose <strong>Add from a file</strong>. Favorites and dates come along; shared collections don't need moving — just join them from the other account with their code.</p>
+    <div class="backup-actions">
+      <button type="button" id="backup-download">Download as a file</button>
+      <button type="button" id="backup-upload">Add from a file</button>
+      <input type="file" id="backup-file" accept=".json,application/json,text/plain" hidden>
+    </div>
 
     <div id="import-options" hidden>
       <p class="form-hint">How should they be ordered?</p>
@@ -3490,11 +3496,15 @@
   $('search').addEventListener('input', renderList);
 
   /* ---- Bulk copy / paste ---- */
-  $('backup-copy').addEventListener('click', () => {
-    const payload = JSON.stringify(
+  function exportPayload() {
+    return JSON.stringify(
       quotes.map(({ text, by, note, added, fav, sharedBy, collectionId, imported }) => ({ text, by, note, added, fav, sharedBy, collectionId, imported: !!imported })),
       null, 2
     );
+  }
+
+  $('backup-copy').addEventListener('click', () => {
+    const payload = exportPayload();
     $('backup-box').value = payload;
     copyToClipboard(payload, () => {
       $('backup-status').textContent = 'Copied your whole collection as text.';
@@ -3502,6 +3512,37 @@
       $('backup-box').select();
       $('backup-status').textContent = 'Your collection is in the box above — copy it with Ctrl/Cmd+C.';
     });
+  });
+
+  /* Same JSON as "Copy my collection", saved as a file so it can be carried
+     to another account (or kept as a backup). */
+  $('backup-download').addEventListener('click', () => {
+    if (quotes.length === 0) { $('backup-status').textContent = 'There are no quotes to download yet.'; return; }
+    const blob = new Blob([exportPayload()], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'quill-quotes-' + new Date().toISOString().slice(0, 10) + '.json';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
+    $('backup-status').textContent = 'Downloaded ' + quotes.length + ' quote' + (quotes.length === 1 ? '' : 's') + '. Sign in to the other account and use "Add from a file".';
+  });
+
+  $('backup-upload').addEventListener('click', () => $('backup-file').click());
+
+  $('backup-file').addEventListener('change', async () => {
+    const file = $('backup-file').files[0];
+    $('backup-file').value = '';
+    if (!file) return;
+    try {
+      $('backup-box').value = await file.text();
+    } catch (e) {
+      $('backup-status').textContent = 'Couldn’t read that file.';
+      return;
+    }
+    $('backup-load').click();
   });
 
   let pendingImportRows = null;
